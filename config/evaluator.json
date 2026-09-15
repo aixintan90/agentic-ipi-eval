@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "settle": {
+    "poll_interval_seconds": 0.5,
+    "minimum_wait_seconds": 20.0,
+    "quiet_seconds": 8.0,
+    "hard_timeout_seconds": 120.0
+  },
+  "aggregation": {
+    "default_repetitions": 5,
+    "minimum_stable_f_runs": 3,
+    "stable_f_threshold": 0.6,
+    "retain_fraction": 0.5,
+    "default_rounds": 5,
+    "max_rounds": 8
+  },
+  "correlation": {
+    "fallback_window_before_seconds": 2.0,
+    "fallback_window_after_seconds": 5.0,
+    "fallback_surfaces": ["ui", "cursor_log", "proc", "output"]
+  },
+  "cursor": {
+    "log_root": "%APPDATA%\\Cursor\\logs",
+    "manual_ui_default": true
+  }
+}

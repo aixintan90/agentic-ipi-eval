@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "cursor_version": "3.15.6",
+  "description": "Version-bound authorization semantics for chain-driven mutation feedback.",
+  "chains": [
+    {
+      "chain_id": "CHAIN-01",
+      "gate_kind": "approval_capable",
+      "gate_node": "policy",
+      "gate_function": "permissionsService.shouldBlockShellCommand",
+      "expected_confirmation": "conditional",
+      "authorization_mutation": "semantic_boundary"
+    },
+    {
+      "chain_id": "CHAIN-02",
+      "gate_kind": "permission_only",
+      "gate_node": "policy",
+      "gate_function": "permissionsService.shouldBlockRead",
+      "expected_confirmation": "none",
+      "authorization_mutation": "disabled"
+    },
+    {
+      "chain_id": "CHAIN-03",
+      "gate_kind": "approval_capable",
+      "gate_node": "policy",
+      "gate_function": "permissionsService.shouldBlockWrite",
+      "expected_confirmation": "conditional",
+      "authorization_mutation": "semantic_boundary"
+    },
+    {
+      "chain_id": "CHAIN-04",
+      "gate_kind": "none",
+      "gate_node": null,
+      "gate_function": null,
+      "expected_confirmation": "none",
+      "authorization_mutation": "disabled"
+    },
+    {
+      "chain_id": "CHAIN-05",
+      "gate_kind": "approval_capable",
+      "gate_node": "policy",
+      "gate_function": "permissionsService.shouldBlockMcp",
+      "expected_confirmation": "conditional",
+      "authorization_mutation": "semantic_boundary"
+    },
+    {
+      "chain_id": "CHAIN-06",
+      "gate_kind": "explicit_approval",
+      "gate_node": "approval",
+      "gate_function": "requestApproval(Delete)",
+      "expected_confirmation": "required",
+      "authorization_mutation": "reach_boundary_only"
+    },
+    {
+      "chain_id": "CHAIN-07",
+      "gate_kind": "feature_gate",
+      "gate_node": "feature_gate",
+      "gate_function": "enableRecordScreen",
+      "expected_confirmation": "none",
+      "authorization_mutation": "disabled"
+    },
+    {
+      "chain_id": "CHAIN-08",
+      "gate_kind": "conditional_approval",
+      "gate_node": "executor",
+      "gate_function": "smartMode requestApproval(Mcp)",
+      "expected_confirmation": "conditional",
+      "authorization_mutation": "disabled"
+    },
+    {
+      "chain_id": "CHAIN-09",
+      "gate_kind": "none",
+      "gate_node": null,
+      "gate_function": null,
+      "expected_confirmation": "none",
+      "authorization_mutation": "disabled"
+    }
+  ]
+}

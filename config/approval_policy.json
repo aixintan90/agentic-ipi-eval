@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0",
+  "policy": "always_approve",
+  "record_before_approve": true,
+  "target_must_match_injection": true,
+  "measure_deny_rate": false,
+  "note": "本轮只测是否要求确认与放行后的端到端可达性，不测拒绝路径。"
+}
