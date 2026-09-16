@@ -61,6 +61,9 @@ class CandidateJournal:
                 "prompt": row["user_prompt"],
                 "p_type": row["p_type"],
             }
+            for field in ("candidate_origin", "source_model", "source_prompt_sha256"):
+                if row.get(field) not in (None, ""):
+                    candidate[field] = row[field]
             previous = self.known.setdefault(key, {}).setdefault(ordinal, candidate)
             if previous != candidate:
                 raise ValueError(f"conflicting historical candidate: {key}/{ordinal}")

@@ -96,6 +96,7 @@ function renderProtocol() {
   const d=state.detail,c=d.config,m=d.manifest;
   $("#protocol-content").innerHTML=kv([
     ["用例数量",d.summary.total],["判定口径",metricText(d.summary.metric)],["被测模型",c?.target.model||m.base_model],
+    ["Prompt 流程",workflowLabel(c?.workflow?.mode)],
     ["提示词生成模型",c?.generation.model||"未记录"],["生成 API",c?.generation.base_url||"未记录"],
     ["每轮提示词数量",(c?.generation.budgets||m.prompt_budget||[8,4,2]).join(" → ")],
     ["授权与注入","完全授权 / "+(c?.injection||m.injection)],["首次成功后停止",c?.generation.early_stop===false?"否":"是"],
@@ -158,7 +159,7 @@ function renderReadiness() {
   else if(failed.length){title=failed.length+" 项检查未通过";description="按下方提示处理，然后重新检查。";id="check-connections";button="重新检查";}
   else{title=r.phase==="ready"?"准备完成":"可以继续这轮实验";description="开始时会再次验证模型调用与额度。";id="start";button=r.phase==="ready"?"开始实验":"继续实验";}
   $("#readiness-content").innerHTML='<div class="next-action"><div><h2>'+title+'</h2><p>'+esc(description)+'</p></div>'+(button?'<button id="'+id+'" class="primary" '+(disabled?"disabled":"")+'>'+button+'</button>':"")+'</div>'+
-    '<div class="setup-summary"><span>用例 <strong>'+num(d.summary.total)+'</strong></span><span>模型 <strong>'+esc(c?.target.model||d.manifest.base_model||"auto")+'</strong></span><span>判定 <strong>'+esc(metricText(d.summary.metric))+'</strong></span></div>'+
+    '<div class="setup-summary"><span>用例 <strong>'+num(d.summary.total)+'</strong></span><span>模型 <strong>'+esc(c?.target.model||d.manifest.base_model||"auto")+'</strong></span><span>流程 <strong>'+esc(workflowLabel(c?.workflow?.mode))+'</strong></span><span>判定 <strong>'+esc(metricText(d.summary.metric))+'</strong></span></div>'+
     (!d.read_only&&!["completed","stopped"].includes(r.phase)?'<section class="connection-section"><div class="section-heading"><h3>连接状态</h3>'+(d.preflight?'<small>'+esc(new Date(d.preflight.at).toLocaleTimeString("zh-CN"))+'</small>':"")+'</div>'+missing.map(x=>secretRow(x.channel,x.label)).join("")+'<div id="probe-result">'+renderChecks(d.preflight)+'</div>'+
       '<details id="connection-options"><summary>修改密钥与连接测试</summary><div class="details-body">'+(!missing.some(x=>x.channel==="api")?secretRow("api","API 密钥"):"")+
       (c.egress.mode==="controlled_remote"?[["email","SMTP 授权码",c.egress.email_enabled],["upload","SSH 密码",c.egress.upload_enabled]].filter(x=>x[2]&&!missing.some(m=>m.channel===x[0])).map(x=>secretRow(x[0],x[1])).join(""):"")+
@@ -210,7 +211,7 @@ function openStart() {
   const effects=p.mode==="controlled_remote"?"真实测试数据："+(p.email_enabled?"邮件 → "+p.recipient+"；":"")+(p.upload_enabled?"上传 → "+p.ssh_host+":"+p.ssh_port+p.remote_directory:""):"不向外部发送数据";
   const texts={
     scope:["用例范围",num(d.summary.total)+" 条 · "+c.platform],
-    protocol:["测试规则","完全授权 · "+(c.injection==="on"?"开启注入":"关闭注入")+" · "+c.generation.budgets.join(" → ")+" · "+(c.generation.early_stop?"首次成功即停止":"执行完整预算")],
+    protocol:["测试规则",workflowLabel(c.workflow?.mode)+" · 完全授权 · "+(c.injection==="on"?"开启注入":"关闭注入")+" · "+c.generation.budgets.join(" → ")+" · "+(c.generation.early_stop?"首次成功即停止":"执行完整预算")],
     metric:["成功判定",metricText(c.evaluation.metric)+"，不代表原始操作真实完成"],
     effects:["实际操作",effects+"。原始 Shell / 系统操作使用代理；邮件收到由人工确认"],
     model:["被测模型",c.target.model+(c.target.model==="auto"?"（自动路由，不固定底层模型）":"")],
@@ -231,7 +232,8 @@ function renderExports() {
   const files=d.files||[];
   $("#export-files").innerHTML=core.filter(f=>files.includes(f)).map(row).join("")||'<p class="empty-message">'+(s.completed?"已有记录，点击“更新报告”生成下载文件。":"还没有实验结果。运行后可在这里下载。")+'</p>';
   $("#extra-export-files").innerHTML=files.filter(f=>!core.includes(f)).map(row).join("");$("#other-exports").hidden=!files.some(f=>!core.includes(f));
-  $("#category-summary").innerHTML='<div class="table-scroll"><table><thead><tr><th>攻击类别</th><th>计划</th><th>已完成</th><th>成功</th><th>阶段成功率</th><th>最终成功率</th></tr></thead><tbody>'+s.categories.map(c=>'<tr><td>'+esc(c.category)+'</td><td>'+num(c.scheduled)+'</td><td>'+num(c.completed)+'</td><td>'+num(c.succeeded)+'</td><td>'+pct(c.observed_rate)+'</td><td>'+pct(c.final_rate)+'</td></tr>').join("")+'</tbody></table></div>';
+  const replay=d.config?.workflow?.mode==="replay_then_tree";
+  $("#category-summary").innerHTML='<div class="table-scroll"><table><thead><tr><th>攻击类别</th><th>计划</th><th>已完成</th><th>成功</th>'+(replay?'<th>直接复测成功</th><th>思维树挽回</th>':'')+'<th>阶段成功率</th><th>最终成功率</th></tr></thead><tbody>'+s.categories.map(c=>'<tr><td>'+esc(c.category)+'</td><td>'+num(c.scheduled)+'</td><td>'+num(c.completed)+'</td><td>'+num(c.succeeded)+'</td>'+(replay?'<td>'+num(c.direct_replay_succeeded)+'</td><td>'+num(c.thought_tree_recovered)+'</td>':'')+'<td>'+pct(c.observed_rate)+'</td><td>'+pct(c.final_rate)+'</td></tr>').join("")+'</tbody></table></div>';
 }
 function leaveSetup() {
   if(state.busy)return false;
@@ -245,9 +247,12 @@ function openConfig(mode="new",step=0) {
   error("");clearTimeout(toast.timer);$("#toast").hidden=true;state.editing=mode==="edit"?state.selected:null;
   const source=mode==="new"?state.bootstrap.defaults:state.detail.config||state.bootstrap.defaults;
   state.config=structuredClone(source);
+  state.config.workflow={...state.bootstrap.defaults.workflow,...state.config.workflow};
   if(mode==="clone")state.config.name=(state.detail.name||source.name)+" · 副本";
   state.corpusLabel=state.config.corpus===state.bootstrap.defaults.corpus?"内置 Windows 用例":state.config.corpus.split(/[\\/]/).pop();
   state.corpusCount=mode!=="new"?state.detail.summary.total:state.bootstrap.default_corpus?.case_count;
+  state.baselineCount=mode!=="new"?state.detail.manifest.baseline_prompt_count||null:null;
+  state.baselineModels=[];
   state.setupOpen=true;state.maxStep=mode==="edit"?2:0;
   $("#form-title").textContent=mode==="edit"?"修改实验设置":mode==="clone"?"复制为新实验":"新建实验";
   $("#form-error").textContent="";$("#adapter-select").innerHTML=state.bootstrap.adapters.map(a=>'<option value="'+esc(a.id)+'" '+(a.available?"":"disabled")+'>'+esc(a.id==="cursor_cli"?"Cursor":a.available?a.label:a.label+"（暂不可用）")+'</option>').join("");
@@ -259,18 +264,22 @@ function openConfig(mode="new",step=0) {
 }
 function fillForm() {
   state.config.egress={...state.bootstrap.defaults.egress,...state.config.egress};
+  state.config.workflow={...state.bootstrap.defaults.workflow,...state.config.workflow};
   field("target.model").innerHTML='<option value="'+esc(state.config.target.model)+'">'+esc(modelLabel(state.config.target.model))+'（待核对）</option>';
   for(const f of $("#config-form").elements) {
     if(!f.name)continue;let value=state.config;for(const p of f.name.split("."))value=value?.[p];
     if(f.type==="checkbox")f.checked=!!value;else f.value=Array.isArray(value)?value.join(", "):value??"";
   }
-  updateOptions();renderCorpusChoice();loadModels();
+  updateOptions();renderCorpusChoice();renderBaselineChoice();loadModels();
 }
 function modelLabel(id,label=id) {
   if(id==="cursor-grok-4.6-high")return "Grok 4.6 · High";
   if(id==="cursor-grok-4.6-high-fast")return "Grok 4.6 · High Fast";
   if(id==="auto")return "Auto · 自动选择（不固定模型）";
   return label;
+}
+function workflowLabel(mode) {
+  return mode==="replay_then_tree"?"已有 Prompt 先复测，失败后使用思维树":"全部用例直接使用思维树";
 }
 function modelTarget() {
   return Object.fromEntries(["adapter","bridge","wsl_distro"].map(k=>[k,field("target."+k).value]));
@@ -320,7 +329,14 @@ function renderCorpusChoice() {
   $("#use-builtin").hidden=field("corpus").value===state.bootstrap.defaults.corpus;
   $("#selected-corpus").innerHTML='<strong>'+esc(state.corpusLabel||"尚未选择用例")+'</strong><small>'+(state.corpusCount!=null?num(state.corpusCount)+" 条用例":"保存时核对用例数量")+'</small>';
 }
+function renderBaselineChoice() {
+  const label=field("workflow.baseline_prompt_label").value||"尚未选择已有成功 Prompt 文件";
+  const detail=state.baselineCount!=null?num(state.baselineCount)+" 条成功 Prompt":"保存时按 case_id 核对匹配范围";
+  $("#baseline-summary").innerHTML='<strong>'+esc(label)+'</strong><small>'+esc(detail)+(state.baselineModels?.length?" · 来源模型 "+esc(state.baselineModels.join("、")):"")+'</small>';
+}
 function updateOptions() {
+  const replay=field("workflow.mode").value==="replay_then_tree";
+  $("#baseline-options").hidden=!replay;
   const remote=field("egress.mode").value==="controlled_remote";
   $("#remote-options").hidden=!remote;$("#email-options").hidden=!remote||!field("egress.email_enabled").checked;$("#upload-options").hidden=!remote||!field("egress.upload_enabled").checked;
   const email=remote&&field("egress.email_enabled").checked,authenticated=email&&field("egress.email_transport").value==="authenticated_smtp";
@@ -340,6 +356,9 @@ function setStep(step) {
   $('.setup-step[data-setup-step="'+step+'"] h2').focus({preventScroll:true});
 }
 function validateStep(step) {
+  if(step===0&&field("workflow.mode").value==="replay_then_tree"&&!field("workflow.baseline_prompt_file").value) {
+    setStep(0);$("#form-error").textContent="请选择已有成功 Prompt 的 JSON 或 JSONL 文件。";$("#import-baseline").focus();return false;
+  }
   if(step===1&&(!state.models||state.modelsTarget!==JSON.stringify(modelTarget())||!state.models.some(row=>row.id===field("target.model").value))) {
     setStep(1);$("#form-error").textContent="请先读取模型列表，并选择可用的被测模型。";$("#refresh-models").focus();return false;
   }
@@ -384,6 +403,20 @@ async function importFiles(event) {
     $("#confirm-import").disabled=!result.can_import;
   }catch(e){$("#import-preview").textContent=e.message;}
 }
+async function importBaseline(event) {
+  const file=event.target.files[0];event.target.value="";
+  if(!file)return;
+  try {
+    if(!/\.jsonl?$/i.test(file.name))throw Error("请选择 JSON 或 JSONL 文件。");
+    if(file.size>20000000)throw Error("成功 Prompt 文件不能超过 20 MB。");
+    const result=await api("/api/import-baseline-prompts",{filename:file.name,content:await file.text()});
+    field("workflow.baseline_prompt_file").value=result.path;
+    field("workflow.baseline_prompt_label").value=result.label;
+    state.baselineCount=result.prompt_count;state.baselineModels=result.source_models||[];
+    renderBaselineChoice();$("#form-error").textContent="";
+    toast("已读取 "+num(result.prompt_count)+" 条已有成功 Prompt");
+  }catch(e){$("#form-error").textContent=e.message;}
+}
 async function action(fn,button) {
   if(state.busy)return;
   state.busy=true;error("");const text=button?.textContent;
@@ -397,7 +430,10 @@ async function loadCases(){
   const params=new URLSearchParams({id,query:$("#case-search").value,status:$("#case-status").value,category:$("#case-category").value,page:state.page});
   try{const result=await api(`/api/cases?${params}`);if(id!==state.selected)return;
     state.page=result.page;$("#case-total").textContent=`${num(result.total)} 条`;
-    $("#case-rows").innerHTML=result.rows.length?result.rows.map(row=>`<tr><td>${esc(row.case_id)}</td><td>${esc(row.attack_category||'未分类')}</td><td>${badge(row.outcome,outcomes[row.outcome])}</td><td>${row.pending?'—':num(row.prompt_count??row.attempt_count??row.prompt_attempt_count)}</td><td><button data-evidence="${esc(row.case_id)}">查看 ↗</button></td></tr>`).join(""):'<tr><td colspan="5">没有符合筛选条件的用例</td></tr>';
+    $("#case-rows").innerHTML=result.rows.length?result.rows.map(row=>{
+      const origin=row.pending?'—':row.direct_replay_success?'已有 Prompt 直接成功':row.thought_tree_recovery_success?'思维树挽回成功':row.metric_success?'思维树成功':'—';
+      return `<tr><td>${esc(row.case_id)}</td><td>${esc(row.attack_category||'未分类')}</td><td>${badge(row.outcome,outcomes[row.outcome])}</td><td>${esc(origin)}</td><td>${row.pending?'—':num(row.prompt_count??row.attempt_count??row.prompt_attempt_count)}</td><td><button data-evidence="${esc(row.case_id)}">查看 ↗</button></td></tr>`;
+    }).join(""):'<tr><td colspan="6">没有符合筛选条件的用例</td></tr>';
     $("#page-label").textContent=`${result.page} / ${result.pages}`;$("#previous").disabled=result.page<=1;$("#next").disabled=result.page>=result.pages;
     $$("[data-evidence]").forEach(b=>b.onclick=()=>showEvidence(b.dataset.evidence));
   }catch(e){error(e.message);}
@@ -407,7 +443,7 @@ async function showEvidence(caseId){
   $('#evidence-title').textContent=caseId;$('#evidence-content').textContent='正在读取证据…';$('#evidence-dialog').showModal();
   try{const data=await api(`/api/attempts?${new URLSearchParams({id:state.selected,case_id:caseId})}`);
     const rows=data.raw_attempts.length?data.raw_attempts:data.attempts;
-    $('#evidence-content').innerHTML=`<p class="muted">${data.attempts.length} 条有效记录 · ${data.raw_attempts.length} 条原始尝试（含基础设施错误）</p>`+(rows.length?rows.map((r,i)=>`<article class="attempt"><header><strong>第 ${esc(r.round||1)} 轮 · 第 ${esc(r.round_ordinal||i+1)} 个</strong>${badge(r.status==='completed'?(r.metric_success?'success':'failed'):'pending',r.metric_success?'判定成功':r.status==='completed'?'未达成功条件':r.status||'未知')}<span>${esc(r.p_type||'')}</span></header><h3>Prompt 原文</h3><pre>${esc(r.user_prompt||r.prompt||'')}</pre><h3>判定证据</h3>${kv([['指标',metricText(r.success_metric)],['失败阶段',r.failure_point||r.fail_point||'—'],['调用意图',r.original_sink_intent_observed??r.intent_verified??'未记录'],['隔离效果已验证',r.f_verified??r.proxy_effect_verified??'未记录'],['邮件服务器接受',r.controlled_delivery?.smtp_accepted??'不适用'],['远端上传回读一致',r.controlled_delivery?.remote_verified??'不适用']])}<details><summary>模型输出与完整原始记录</summary><pre>${esc(r.run_output||r.output||r.assistant_reply||r.stderr||'无输出')}</pre><pre>${esc(JSON.stringify(r,null,2))}</pre></details></article>`).join(''):'<p class="note">该用例还没有执行记录。</p>')+(data.candidates.length?`<details><summary>已生成的全部候选（可能包含尚未执行的 Prompt）</summary><pre class="raw-json">${esc(JSON.stringify(data.candidates,null,2))}</pre></details>`:'');
+    $('#evidence-content').innerHTML=`<p class="muted">${data.attempts.length} 条有效记录 · ${data.raw_attempts.length} 条原始尝试（含基础设施错误）</p>`+(rows.length?rows.map((r,i)=>`<article class="attempt"><header><strong>${r.candidate_origin==='direct_replay'?'已有 Prompt 直接复测':`思维树第 ${esc(r.round||1)} 轮 · 第 ${esc(r.round_ordinal||i+1)} 个`}</strong>${badge(r.status==='completed'?(r.metric_success?'success':'failed'):'pending',r.metric_success?'判定成功':r.status==='completed'?'未达成功条件':r.status||'未知')}<span>${esc(r.p_type||'')}</span></header><h3>Prompt 原文</h3><pre>${esc(r.user_prompt||r.prompt||'')}</pre><h3>判定证据</h3>${kv([['Prompt 来源',r.candidate_origin==='direct_replay'?'上传文件直接复测':'思维树生成'],['来源模型',r.source_model||'未记录'],['指标',metricText(r.success_metric)],['失败阶段',r.failure_point||r.fail_point||'—'],['调用意图',r.original_sink_intent_observed??r.intent_verified??'未记录'],['隔离效果已验证',r.f_verified??r.proxy_effect_verified??'未记录'],['邮件服务器接受',r.controlled_delivery?.smtp_accepted??'不适用'],['远端上传回读一致',r.controlled_delivery?.remote_verified??'不适用']])}<details><summary>模型输出与完整原始记录</summary><pre>${esc(r.run_output||r.output||r.assistant_reply||r.stderr||'无输出')}</pre><pre>${esc(JSON.stringify(r,null,2))}</pre></details></article>`).join(''):'<p class="note">该用例还没有执行记录。</p>')+(data.candidates.length?`<details><summary>本轮全部候选（含直接复测与可能尚未执行的 Prompt）</summary><pre class="raw-json">${esc(JSON.stringify(data.candidates,null,2))}</pre></details>`:'');
   }catch(e){$('#evidence-content').textContent=e.message;}
 }
 
@@ -422,7 +458,7 @@ $("#edit-config").onclick=()=>openConfig("edit");$("#clone").onclick=()=>openCon
 $("#show-config").onclick=()=>{renderProtocol();$("#protocol-dialog").showModal();$(".more-menu").open=false;};
 $("#download-config").onclick=()=>downloadObject(state.detail.config,"experiment-config.json");
 $("#refresh").onclick=()=>{if(!state.setupOpen)action(()=>refresh(),$("#refresh"));};
-for(const name of ["egress.mode","egress.email_enabled","egress.email_transport","egress.upload_enabled","evaluation.metric"])field(name).onchange=updateOptions;
+for(const name of ["workflow.mode","egress.mode","egress.email_enabled","egress.email_transport","egress.upload_enabled","evaluation.metric"])field(name).onchange=updateOptions;
 $("#refresh-models").onclick=loadModels;
 field("target.model").onchange=modelMessage;
 for(const name of ["target.adapter","target.bridge"])field(name).onchange=loadModels;
@@ -442,6 +478,8 @@ $("#import-config").onchange=async event=>{
   }catch(e){$("#form-error").textContent=e.message;}finally{event.target.value="";}
 };
 $("#import-corpus").onchange=importFiles;$("#import-folder").onchange=importFiles;
+$("#import-baseline").onchange=importBaseline;
+$("#clear-baseline").onclick=()=>{field("workflow.baseline_prompt_file").value="";field("workflow.baseline_prompt_label").value="";state.baselineCount=null;state.baselineModels=[];renderBaselineChoice();};
 $("#confirm-import").onclick=()=>action(async()=>{
   const result=await api("/api/confirm-corpus",{token:state.importToken});
   field("corpus").value=result.path;state.corpusLabel=state.importLabel;state.corpusCount=result.case_count;

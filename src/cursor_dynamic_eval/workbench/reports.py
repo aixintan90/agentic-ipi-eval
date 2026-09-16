@@ -24,6 +24,16 @@ def summarize(rows: list[dict], manifest: dict) -> dict:
     successes = Counter(
         r.get("attack_category") or "unspecified" for r in rows if r.get("metric_success")
     )
+    direct_successes = Counter(
+        r.get("attack_category") or "unspecified"
+        for r in rows
+        if r.get("direct_replay_success")
+    )
+    recoveries = Counter(
+        r.get("attack_category") or "unspecified"
+        for r in rows
+        if r.get("thought_tree_recovery_success")
+    )
     categories = manifest.get("categories") or manifest.get("category_counts") or completed
     count = sum(successes.values())
     return {
@@ -35,12 +45,24 @@ def summarize(rows: list[dict], manifest: dict) -> dict:
         "metric": metric,
         "observed_rate": count / len(rows) if rows else None,
         "final_rate": count / total if total and len(rows) == total else None,
+        "workflow": {
+            "direct_replay_attempted": sum(bool(r.get("direct_replay_attempted")) for r in rows),
+            "direct_replay_succeeded": sum(bool(r.get("direct_replay_success")) for r in rows),
+            "thought_tree_attempted": sum(
+                int(r.get("thought_tree_attempt_count") or 0) > 0 for r in rows
+            ),
+            "thought_tree_recovered": sum(
+                bool(r.get("thought_tree_recovery_success")) for r in rows
+            ),
+        },
         "categories": [
             {
                 "category": category,
                 "scheduled": scheduled,
                 "completed": completed[category],
                 "succeeded": successes[category],
+                "direct_replay_succeeded": direct_successes[category],
+                "thought_tree_recovered": recoveries[category],
                 "observed_rate": successes[category] / completed[category]
                 if completed[category]
                 else None,
@@ -114,10 +136,26 @@ def export_report(root: Path, manifest: dict, config: dict) -> dict:
         "",
         f"被测模型：`{config['target']['model']}`；变异模型：`{config['generation']['model']}`。",
         f"每轮预算：{config['generation']['budgets']}；首次成功停止：{config['generation']['early_stop']}。",
-        "",
-        "| 攻击类别 | 计划 | 已完成 | 成功 | 已完成用例成功率 |",
-        "|---|---:|---:|---:|---:|",
     ]
+    if config.get("workflow", {}).get("mode") == "replay_then_tree":
+        workflow = summary["workflow"]
+        md.extend(
+            [
+                "",
+                "本轮启用了可选的两阶段流程：先原样复测本地上传的已有成功 Prompt，"
+                "直接未成功的用例才进入思维树生成。",
+                f"直接复测成功 **{workflow['direct_replay_succeeded']}** 条；"
+                f"进入思维树 **{workflow['thought_tree_attempted']}** 条；"
+                f"思维树挽回 **{workflow['thought_tree_recovered']}** 条。",
+            ]
+        )
+    md.extend(
+        [
+            "",
+            "| 攻击类别 | 计划 | 已完成 | 成功 | 已完成用例成功率 |",
+            "|---|---:|---:|---:|---:|",
+        ]
+    )
     for item in summary["categories"]:
         rate = "—" if item["observed_rate"] is None else f"{item['observed_rate']:.2%}"
         label = item["category"].replace("|", "\\|").replace("\n", " ")
@@ -156,7 +194,19 @@ def export_report(root: Path, manifest: dict, config: dict) -> dict:
     sheet.append([METRICS[summary["metric"]]])
     sheet.append(["受控代理实验：原始宿主机操作及外部邮件、上传均未执行"])
     sheet.append(["状态", "完整结果" if summary["final_rate"] is not None else "阶段性结果"])
-    sheet.append(["范围", "计划用例", "已完成", "成功", "正常失败", "阶段性成功率", "最终成功率"])
+    sheet.append(
+        [
+            "范围",
+            "计划用例",
+            "已完成",
+            "成功",
+            "正常失败",
+            "阶段性成功率",
+            "最终成功率",
+            "直接复测成功",
+            "思维树挽回",
+        ]
+    )
     sheet.append(
         [
             "总体",
@@ -166,6 +216,8 @@ def export_report(root: Path, manifest: dict, config: dict) -> dict:
             summary["attack_failed"],
             '=IF(C6=0,"",D6/C6)',
             '=IF(AND(B6>0,C6=B6),D6/B6,"")',
+            summary["workflow"]["direct_replay_succeeded"],
+            summary["workflow"]["thought_tree_recovered"],
         ]
     )
     for index, item in enumerate(summary["categories"], 7):
@@ -178,13 +230,26 @@ def export_report(root: Path, manifest: dict, config: dict) -> dict:
                 f"=C{index}-D{index}",
                 f'=IF(C{index}=0,"",D{index}/C{index})',
                 f'=IF(AND(B{index}>0,C{index}=B{index}),D{index}/B{index},"")',
+                item["direct_replay_succeeded"],
+                item["thought_tree_recovered"],
             ]
         )
     for row in sheet.iter_rows(min_row=6, min_col=6, max_col=7):
         for cell in row:
             cell.number_format = "0.00%"
     detail = workbook.create_sheet("用例结果")
-    detail.append(["case_id", "攻击类别", "成功指标", "是否成功", "Prompt 次数"])
+    detail.append(
+        [
+            "case_id",
+            "攻击类别",
+            "成功指标",
+            "是否成功",
+            "Prompt 次数",
+            "成功来源",
+            "直接复测成功",
+            "思维树尝试数",
+        ]
+    )
     for case in cases:
         detail.append(
             [
@@ -193,6 +258,9 @@ def export_report(root: Path, manifest: dict, config: dict) -> dict:
                 case.get("success_metric"),
                 bool(case.get("metric_success")),
                 case.get("prompt_attempt_count", case.get("attempt_count")),
+                case.get("successful_prompt_origin"),
+                bool(case.get("direct_replay_success")),
+                case.get("thought_tree_attempt_count", 0),
             ]
         )
     for ws, header in ((sheet, 5), (detail, 1)):
@@ -213,12 +281,12 @@ def export_report(root: Path, manifest: dict, config: dict) -> dict:
         ws.freeze_panes = f"B{header + 1}"
         ws.auto_filter.ref = f"A{header}:{ws.cell(ws.max_row, ws.max_column).coordinate}"
         ws.column_dimensions["A"].width = 54 if ws == detail else 33
-        for key in ("B", "C", "D", "E", "F", "G"):
+        for key in ("B", "C", "D", "E", "F", "G", "H", "I"):
             ws.column_dimensions[key].width = 26 if ws == detail else 19
         for i in range(1, ws.max_row + 1):
             ws.row_dimensions[i].height = 26
     for index in (1, 2, 3):
-        sheet.merge_cells(start_row=index, start_column=1, end_row=index, end_column=7)
+        sheet.merge_cells(start_row=index, start_column=1, end_row=index, end_column=9)
     temporary = output / ".aggregate_tables.xlsx"
     workbook.save(temporary)
     temporary.replace(output / "aggregate_tables.xlsx")

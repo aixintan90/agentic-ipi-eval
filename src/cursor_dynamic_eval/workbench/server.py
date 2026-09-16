@@ -146,6 +146,10 @@ def create_server(project: Path, *, host="127.0.0.1", port=8765, service=None):
                     value = app.preview_corpus(payload["files"])
                 elif path == "/api/confirm-corpus":
                     value = app.confirm_corpus(payload["token"])
+                elif path == "/api/import-baseline-prompts":
+                    value = app.import_baseline_prompts(
+                        payload["filename"], payload["content"]
+                    )
                 elif path == "/api/credential":
                     value = app.credential(identifier, payload["key"])
                 elif path == "/api/egress-credential":

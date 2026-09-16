@@ -1,4 +1,4 @@
-"""Local control plane: frozen configs, explicit review, processes and evidence queries."""
+"""Local control plane: explicit review, processes and evidence queries."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import subprocess
 import sys
 import threading
 import uuid
+from collections import Counter
 from pathlib import Path
 
 from ..automation.formal_checkpoint import exclusive_batch
@@ -98,6 +99,36 @@ class WorkbenchService:
                 identifier = uuid.uuid4().hex[:16]
                 root = self.root / identifier
                 root.mkdir()
+            selected_cases = cases
+            if config["workflow"]["mode"] == "replay_then_tree":
+                from .baseline_prompts import load_baseline_prompts
+
+                prompt_source = Path(config["workflow"]["baseline_prompt_file"]).resolve()
+                if self.root != prompt_source and self.root not in prompt_source.parents:
+                    raise ValueError("请从当前工作台重新上传已有成功 Prompt 文件")
+                prompts = load_baseline_prompts(prompt_source)
+                prompt_ids = {row["case_id"] for row in prompts}
+                selected_cases = [case for case in cases if case.case_id in prompt_ids]
+                if not selected_cases:
+                    raise ValueError("成功 Prompt 文件与当前用例没有匹配的 case_id")
+                prompt_sha256 = hashlib.sha256(prompt_source.read_bytes()).hexdigest()
+                inventory = {
+                    **inventory,
+                    "case_count": len(selected_cases),
+                    "categories": dict(
+                        Counter(
+                            case.metadata.get("attack_category", "unspecified")
+                            for case in selected_cases
+                        )
+                    ),
+                    "source_case_count": len(cases),
+                    "baseline_prompt_count": len(prompts),
+                    "baseline_prompt_label": config["workflow"]["baseline_prompt_label"],
+                    "baseline_prompt_sha256": prompt_sha256,
+                    "baseline_matched_count": len(selected_cases),
+                    "excluded_without_baseline_count": len(cases) - len(selected_cases),
+                    "unused_baseline_prompt_count": len(prompt_ids - {c.case_id for c in cases}),
+                }
             runtime_root = config["execution"]["runtime_root"]
             if runtime_root:
                 runtime = Path(runtime_root).resolve() / identifier
@@ -122,7 +153,7 @@ class WorkbenchService:
                 "adapter_version": adapter.version,
                 "runtime_dir": str(runtime),
                 "primary_success_metric": config["evaluation"]["metric"],
-                "case_ids": [c.case_id for c in cases],
+                "case_ids": [c.case_id for c in selected_cases],
                 **inventory,
             }
             write_json(root / "config.json", config)
@@ -131,6 +162,35 @@ class WorkbenchService:
             for name in ("review.json", "preflight.json"):
                 (root / name).unlink(missing_ok=True)
         return self.detail(identifier)
+
+    def import_baseline_prompts(self, filename: str, content: str):
+        from .baseline_prompts import load_baseline_prompts
+
+        suffix = Path(filename).suffix.lower()
+        if suffix not in {".json", ".jsonl"}:
+            raise ValueError("已有成功 Prompt 仅支持 JSON 或 JSONL")
+        encoded = content.encode("utf-8")
+        if not encoded or len(encoded) > 20_000_000:
+            raise ValueError("成功 Prompt 文件为空或超过 20 MB")
+        token = uuid.uuid4().hex[:16]
+        imports = self.root / "imports"
+        imports.mkdir(exist_ok=True)
+        temporary = imports / f"baseline-{token}.upload{suffix}"
+        normalized = imports / f"baseline-{token}.json"
+        temporary.write_text(content, encoding="utf-8")
+        try:
+            prompts = load_baseline_prompts(temporary)
+            write_json(normalized, prompts)
+        finally:
+            temporary.unlink(missing_ok=True)
+        models = sorted({row["source_model"] for row in prompts if row["source_model"]})
+        return {
+            "path": str(normalized),
+            "label": Path(filename).name,
+            "prompt_count": len(prompts),
+            "source_models": models,
+            "sample_case_ids": [row["case_id"] for row in prompts[:5]],
+        }
 
     def import_corpus(self, filename: str, content: str):
         suffix = Path(filename).suffix.lower()
@@ -592,7 +652,10 @@ class WorkbenchService:
             _, source = __import__(
                 "cursor_dynamic_eval.automation.corpus", fromlist=["load_corpus"]
             ).load_corpus(self.path(identifier) / manifest["corpus_file"])
+            scheduled = set(manifest.get("case_ids") or [])
             for case in source:
+                if scheduled and case.case_id not in scheduled:
+                    continue
                 known.setdefault(
                     case.case_id,
                     {

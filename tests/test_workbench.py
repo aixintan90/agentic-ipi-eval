@@ -114,6 +114,100 @@ def test_engine_complete_failed_prompts_resume_and_exports(app):
     assert book["用例结果"].max_row == 3
 
 
+def test_optional_direct_replay_schedules_matching_cases_and_skips_mutation(app):
+    service, config = app
+    imported = service.import_baseline_prompts(
+        "successful_prompts.json",
+        json.dumps(
+            [
+                {
+                    "case_id": "positive",
+                    "prompt": "Previously successful local replay prompt.",
+                    "base_model": "source-model",
+                }
+            ]
+        ),
+    )
+    config["workflow"] = {
+        "mode": "replay_then_tree",
+        "baseline_prompt_file": imported["path"],
+        "baseline_prompt_label": imported["label"],
+    }
+    item = service.save(config)
+    assert item["manifest"]["case_ids"] == ["positive"]
+    assert item["manifest"]["source_case_count"] == 2
+    assert item["manifest"]["excluded_without_baseline_count"] == 1
+    assert item["config"]["workflow"]["baseline_prompt_file"] == imported["path"]
+    assert item["manifest"]["baseline_prompt_label"] == "successful_prompts.json"
+    assert len(item["manifest"]["baseline_prompt_sha256"]) == 64
+    assert not (service.path(item["id"]) / "baseline_prompts.json").exists()
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("a successful direct replay must not call the mutation generator")
+
+    result = run(service.path(item["id"]), generator=forbidden, backend_factory=factory)
+    assert result["completed"] == result["succeeded"] == 1
+    prompts = read_jsonl(service.path(item["id"]) / "results/prompt_level_ledger.jsonl")
+    assert len(prompts) == 1
+    assert prompts[0]["candidate_origin"] == "direct_replay"
+    summary = read_json(service.path(item["id"]) / "results/summary.json")
+    assert summary["workflow"]["direct_replay_succeeded"] == 1
+    assert summary["workflow"]["thought_tree_attempted"] == 0
+
+
+def test_optional_direct_replay_failure_enters_tree_and_records_recovery(app):
+    service, config = app
+    imported = service.import_baseline_prompts(
+        "successful_prompts.jsonl",
+        json.dumps({"case_id": "negative", "successful_prompt": "Replay this first."}),
+    )
+    config["workflow"] = {
+        "mode": "replay_then_tree",
+        "baseline_prompt_file": imported["path"],
+        "baseline_prompt_label": imported["label"],
+    }
+    config["generation"]["budgets"] = [1]
+
+    def recovery_generator(case, round_no, budget, **kwargs):
+        assert round_no == budget == 1
+        assert kwargs["prior_attempts"][0]["candidate_origin"] == "direct_replay"
+        return [{"candidate_id": case.case_id + ":tree:1", "prompt": "Tree recovery."}]
+
+    def recovery_factory(root, config, gate):
+        def execute(case, candidate, **kwargs):
+            recovered = candidate.get("candidate_origin") == "thought_tree"
+            return {
+                "status": "completed",
+                "intent_verified": recovered,
+                "original_sink_intent_observed": recovered,
+                "f_verified": recovered,
+                "source_call_observed": True,
+                "source_return_observed": True,
+                "original_host_action_executed": False,
+                "output": "Synthetic test output",
+                "levels": ["A", "B", "C"],
+                "depth": 3,
+            }
+
+        return execute
+
+    item = service.save(config)
+    result = run(
+        service.path(item["id"]),
+        generator=recovery_generator,
+        backend_factory=recovery_factory,
+    )
+    assert result["completed"] == result["succeeded"] == 1
+    prompts = read_jsonl(service.path(item["id"]) / "results/prompt_level_ledger.jsonl")
+    assert [row["candidate_origin"] for row in prompts] == [
+        "direct_replay",
+        "thought_tree",
+    ]
+    cases = read_jsonl(service.path(item["id"]) / "results/case_level_ledger.jsonl")
+    assert cases[0]["thought_tree_recovery_success"]
+    assert cases[0]["successful_prompt_origin"] == "thought_tree"
+
+
 def test_pause_keeps_pending_out_of_failed_and_resumes(app):
     service, config = app
     item = service.save(config)

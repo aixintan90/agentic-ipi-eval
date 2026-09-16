@@ -70,9 +70,12 @@ def verify(root: Path) -> tuple[dict, dict, list]:
     adapter = get_adapter(config)
     if adapter.version != manifest["adapter_version"]:
         raise ValueError("执行适配器版本已变更")
-    _, cases = load_corpus(root / manifest["corpus_file"])
-    if [c.case_id for c in cases] != manifest["case_ids"]:
-        raise ValueError("冻结用例顺序不一致")
+    _, available_cases = load_corpus(root / manifest["corpus_file"])
+    by_id = {case.case_id: case for case in available_cases}
+    missing = [case_id for case_id in manifest["case_ids"] if case_id not in by_id]
+    if missing:
+        raise ValueError("冻结用例缺失：" + "、".join(missing[:5]))
+    cases = [by_id[case_id] for case_id in manifest["case_ids"]]
     return config, manifest, cases
 
 
@@ -152,12 +155,28 @@ def _run(root, config, manifest, cases, generator, backend_factory):
     def unavailable(*args, **kwargs):
         raise PendingReplay()
 
+    workflow = config.get("workflow") or {"mode": "thought_tree"}
+    replay_mode = workflow.get("mode") == "replay_then_tree"
+    effective_budgets = (
+        (1, *tuple(config["generation"]["budgets"]))
+        if replay_mode
+        else tuple(config["generation"]["budgets"])
+    )
+    baseline_prompts = {}
+    if replay_mode:
+        from .baseline_prompts import prompt_index
+
+        baseline_prompts = prompt_index(Path(workflow["baseline_prompt_file"]))
+        missing = [case.case_id for case in cases if case.case_id not in baseline_prompts]
+        if missing:
+            raise ValueError("本轮用例缺少已有成功 Prompt：" + "、".join(missing[:5]))
+
     def execute_case(case, candidate_generator, execute):
         return run_formal_cases(
             [case],
             generate_candidates=candidate_generator,
             execute_candidate=execute,
-            budgets=tuple(config["generation"]["budgets"]),
+            budgets=effective_budgets,
             condition=config["authorization"],
             injection=config["injection"],
             base_model=config["target"]["model"],
@@ -199,13 +218,40 @@ def _run(root, config, manifest, cases, generator, backend_factory):
     adapter = get_adapter(config)
     factory = backend_factory or adapter.create_backend
     pending = iter(c for c in cases if c.case_id not in results)
-    if len(results) < len(cases):
-        generator = generator or DeepSeekFormalGenerator(
-            mutation_client(config),
-            condition=config["authorization"],
-            concurrency=config["generation"]["concurrency"],
+    mutation_generator = generator
+
+    def generate_for_workflow(case, round_no, budget, *, prior_attempts):
+        nonlocal mutation_generator
+        if replay_mode and round_no == 1:
+            baseline_prompt = baseline_prompts[case.case_id]
+            return [
+                {
+                    "candidate_id": f"{case.case_id}:direct-replay:1",
+                    "prompt": baseline_prompt["prompt"],
+                    "p_type": baseline_prompt.get("source_p_type") or "direct_replay",
+                    "candidate_origin": "direct_replay",
+                    "source_model": baseline_prompt.get("source_model") or None,
+                    "source_prompt_sha256": baseline_prompt["prompt_sha256"],
+                }
+            ]
+        if mutation_generator is None:
+            mutation_generator = DeepSeekFormalGenerator(
+                mutation_client(config),
+                condition=config["authorization"],
+                concurrency=config["generation"]["concurrency"],
+            )
+        tree_round = round_no - 1 if replay_mode else round_no
+        candidates = mutation_generator(
+            case,
+            tree_round,
+            budget,
+            prior_attempts=prior_attempts,
         )
-    journal = CandidateJournal(generator, runtime / "candidates", records)
+        for candidate in candidates:
+            candidate.setdefault("candidate_origin", "thought_tree")
+        return candidates
+
+    journal = CandidateJournal(generate_for_workflow, runtime / "candidates", records)
 
     def task(case):
         gate.check()
@@ -291,6 +337,7 @@ def _run(root, config, manifest, cases, generator, backend_factory):
         {
             **result,
             "metric": config["evaluation"]["metric"],
+            "workflow_mode": workflow.get("mode", "thought_tree"),
             "config_sha256": manifest["config_sha256"],
         },
     )

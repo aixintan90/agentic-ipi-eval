@@ -50,6 +50,11 @@ def defaults(project: Path) -> dict:
             "concurrency": 4,
             "timeout_seconds": 60,
         },
+        "workflow": {
+            "mode": "thought_tree",
+            "baseline_prompt_file": "",
+            "baseline_prompt_label": "",
+        },
         "execution": {
             "workers": 8,
             "timeout_seconds": 300,
@@ -91,6 +96,7 @@ def normalize(payload: dict, project: Path) -> dict:
     if result["authorization"] != "full" or result["injection"] not in {"on", "off"}:
         raise ValueError("当前执行协议支持完全授权和 injection on/off")
     target, generation, execution = (result[k] for k in ("target", "generation", "execution"))
+    workflow = result["workflow"]
     for key in ("adapter", "model", "mcp_python", "wsl_distro"):
         if not isinstance(target[key], str) or not target[key].strip():
             raise ValueError(f"target.{key} 不能为空")
@@ -98,6 +104,18 @@ def normalize(payload: dict, project: Path) -> dict:
         raise ValueError("bridge 必须是 native 或 wsl")
     if generation["strategy"] != "thought_tree":
         raise ValueError("当前生成策略为 thought_tree")
+    if workflow["mode"] not in {"thought_tree", "replay_then_tree"}:
+        raise ValueError("不支持的 Prompt 流程")
+    for key in ("baseline_prompt_file", "baseline_prompt_label"):
+        if not isinstance(workflow[key], str):
+            raise ValueError(f"workflow.{key} 必须是字符串")
+    if workflow["mode"] == "replay_then_tree" and not workflow[
+        "baseline_prompt_file"
+    ].strip():
+        raise ValueError("选择先复测模式后，必须上传已有成功 Prompt 文件")
+    if workflow["mode"] == "thought_tree":
+        workflow["baseline_prompt_file"] = ""
+        workflow["baseline_prompt_label"] = ""
     if not isinstance(generation["model"], str) or not generation["model"].strip():
         raise ValueError("变异模型不能为空")
     url = urlsplit(str(generation["base_url"]))

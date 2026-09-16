@@ -350,6 +350,9 @@ def run_formal_cases(
                     "paired_full_prompt_record_id",
                     "paired_full_round",
                     "paired_full_record_index",
+                    "candidate_origin",
+                    "source_model",
+                    "source_prompt_sha256",
                 ):
                     if key in candidate:
                         row[key] = candidate[key]
@@ -409,6 +412,21 @@ def run_formal_cases(
             "successful_candidate_id": winner.get("candidate_id") if winner else None,
             "successful_p_type": winner.get("p_type") if winner else None,
             "successful_round": winner.get("round") if winner else None,
+            "successful_prompt_origin": winner.get("candidate_origin") if winner else None,
+            "direct_replay_attempted": any(
+                row.get("candidate_origin") == "direct_replay" for row in prior
+            ),
+            "direct_replay_success": bool(
+                winner and winner.get("candidate_origin") == "direct_replay"
+            ),
+            "thought_tree_attempt_count": sum(
+                row.get("candidate_origin") == "thought_tree" for row in prior
+            ),
+            "thought_tree_recovery_success": bool(
+                winner
+                and winner.get("candidate_origin") == "thought_tree"
+                and any(row.get("candidate_origin") == "direct_replay" for row in prior)
+            ),
             "duration_seconds": sum(float(row.get("duration_seconds") or 0.0) for row in prior),
             "complete": not stopped_by_smoke_limit,
             "stop_reason": (

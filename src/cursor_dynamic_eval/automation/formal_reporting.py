@@ -399,6 +399,9 @@ def normalize_prompt_record(record: Mapping[str, Any], *, record_index: int) -> 
             else None
         ),
         "p_type": p_type,
+        "candidate_origin": _text(record.get("candidate_origin"), default="thought_tree"),
+        "source_model": _text(record.get("source_model")) or None,
+        "source_prompt_sha256": _text(record.get("source_prompt_sha256")) or None,
         "paired_full_prompt_record_id": _text(record.get("paired_full_prompt_record_id")) or None,
         "paired_full_round": (
             _positive_int(record.get("paired_full_round"))
@@ -528,6 +531,12 @@ def build_case_level_ledger(
         durations = [float(row.get("duration_seconds") or 0.0) for row in attempted]
         rounds = sorted({int(row.get("round") or 1) for row in attempted})
         p_types = sorted({_text(row.get("p_type")) for row in attempted})
+        direct_attempts = [
+            row for row in attempted if row.get("candidate_origin") == "direct_replay"
+        ]
+        tree_attempts = [
+            row for row in attempted if row.get("candidate_origin") == "thought_tree"
+        ]
         case_id, group, authorization, injection = key
         case_rows.append(
             {
@@ -565,6 +574,19 @@ def build_case_level_ledger(
                 "rounds_attempted": rounds,
                 "max_round_attempted": max(rounds, default=None),
                 "p_types_attempted": p_types,
+                "candidate_origins_attempted": sorted(
+                    {_text(row.get("candidate_origin")) for row in attempted}
+                ),
+                "direct_replay_attempted": bool(direct_attempts),
+                "direct_replay_success": bool(
+                    winner and winner.get("candidate_origin") == "direct_replay"
+                ),
+                "thought_tree_attempt_count": len(tree_attempts),
+                "thought_tree_recovery_success": bool(
+                    winner
+                    and winner.get("candidate_origin") == "thought_tree"
+                    and direct_attempts
+                ),
                 "duration_seconds": sum(durations),
                 "mean_prompt_duration_seconds": (
                     sum(durations) / len(durations) if durations else 0.0
@@ -588,6 +610,10 @@ def build_case_level_ledger(
                 "successful_prompt_id": winner.get("prompt_id") if winner else None,
                 "successful_prompt": winner.get("prompt") if winner else None,
                 "successful_prompt_sha256": winner.get("prompt_sha256") if winner else None,
+                "successful_prompt_origin": (
+                    winner.get("candidate_origin") if winner else None
+                ),
+                "successful_source_model": winner.get("source_model") if winner else None,
                 "successful_round": winner.get("round") if winner else None,
                 "successful_p_type": winner.get("p_type") if winner else None,
                 "success_basis": winner.get("success_basis") if winner else None,
@@ -629,6 +655,8 @@ def build_successful_prompts(
                 "prompt_id": row.get("successful_prompt_id"),
                 "round": row["successful_round"],
                 "p_type": row["successful_p_type"],
+                "prompt_origin": row.get("successful_prompt_origin"),
+                "source_model": row.get("successful_source_model"),
                 "prompt": row["successful_prompt"],
                 "prompt_sha256": row["successful_prompt_sha256"],
                 "success_basis": row["success_basis"],

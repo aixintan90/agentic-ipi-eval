@@ -2,13 +2,13 @@
 
 一个可扩展、证据驱动的 Agent 间接提示注入（Indirect Prompt Injection, IPI）自动化实验工作台。
 
-当前公开版本为 `v0.1.3-preview`。它提供 Windows 图形界面、思维树 Prompt 生成、并发 CLI 调度、暂停恢复、逐 Prompt 证据账本、Effect-ASR 汇总，以及 Excel / JSON / Markdown 导出。
+当前公开版本为 `v0.1.4-preview`。它提供 Windows 图形界面、思维树 Prompt 生成、已有成功 Prompt 复测、并发 CLI 调度、暂停恢复、逐 Prompt 证据账本、Effect-ASR 汇总，以及 Excel / JSON / Markdown 导出。
 
 > 公开仓库和发行包不包含私有测试语料、历史实验结果、账号、API 密钥、邮件凭据或服务器配置。内置的两条示例只操作逐运行隔离的合成文件。
 
 ## 下载与启动
 
-从仓库的 Releases 页面下载 `AgenticIPI-Workbench-v0.1.3-preview.zip`，核对 SHA-256 后完整解压，再双击 `AgenticIPIWorkbench.exe`。
+从仓库的 Releases 页面下载 `AgenticIPI-Workbench-v0.1.4-preview.zip`，核对 SHA-256 后完整解压，再双击 `AgenticIPIWorkbench.exe`。
 
 控制台默认只监听 `127.0.0.1:8765`；端口占用时会尝试后续端口。实验数据默认保存在：
 
@@ -32,6 +32,8 @@ EXE 不要求单独安装 Python 或 Node。执行真实 Cursor 实验仍需要�
 4. 配置同时运行的 CLI 数量、超时、基础设施重试与导出频率。
 5. 完成范围、协议、指标、实际效果、模型和数据费用六项确认。
 6. 运行预检后启动；可暂停、恢复、查看每次尝试并导出结果。
+
+默认流程仍对全部用例执行 `8 → 4 → 2` 思维树。需要验证上一轮成功 Prompt 能否在当前模型复现时，可选择“先复测已有成功 Prompt，失败项再使用思维树”，并从本机上传 JSON 或 JSONL。系统只调度能按 `case_id` 匹配的用例，先原样复测一次；直接未成功时才调用变异模型。报告会分别记录直接复测成功、进入思维树和思维树挽回。
 
 ## 成功口径
 
@@ -108,4 +110,3 @@ py -3.12 -m venv .venv
 - EXE 尚未进行代码签名，Windows 可能显示“未知发布者”。
 - 真实模型、账号额度和网络传输由操作者环境决定，离线单元测试不能替代真实预检。
 - 本仓库当前未附带开源许可证；除非仓库所有者另行添加许可证，默认保留全部权利。
-
