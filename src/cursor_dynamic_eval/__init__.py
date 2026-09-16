@@ -5,4 +5,4 @@ from .core.events import Event
 from .core.run_context import RunContext
 
 __all__ = ["Event", "RunContext", "judge"]
-__version__ = "1.0.2"
+__version__ = "1.0.3"

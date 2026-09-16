@@ -21,13 +21,13 @@
 
 从 GitHub Releases 下载最新版：
 
-- AgenticIPIWorkbench-v1.0.2.exe
+- AgenticIPIWorkbench-v1.0.3.exe
 - 同一 Release 页面公布的 SHA-256
 
 PowerShell 中核对文件：
 
 ~~~powershell
-Get-FileHash .\AgenticIPIWorkbench-v1.0.2.exe -Algorithm SHA256
+Get-FileHash .\AgenticIPIWorkbench-v1.0.3.exe -Algorithm SHA256
 ~~~
 
 输出必须与 Release 页面一致。EXE 暂未代码签名，Windows 可能显示“未知发布者”。只有哈希一致且下载来源正确时才继续。
@@ -348,4 +348,3 @@ ssh-keyscan -p <端口> <主机名> | ssh-keygen -lf - -E sha256
 - [ ] 实验结束后下载报告、Excel、成功 Prompt 和完整账本。
 
 遇到问题时，应展开失败项目的“技术详情”，同时记录软件版本、实验 ID、WSL 名称和错误原文；不要在截图或聊天中暴露 API 密钥、邮箱授权码或 SSH 密码。
-
