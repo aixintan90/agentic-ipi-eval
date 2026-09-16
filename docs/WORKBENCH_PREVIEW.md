@@ -1,15 +1,15 @@
 # Experiment Workbench 0.1.4 预览版
 
-这是首个公开预览版。界面采用本机 Web 控制台，后台继续使用 CLI 自动实验；发布包不包含任何私有语料、历史结果、账号、密钥或真实目标配置。
+这是公开预览版。界面运行在无地址栏、无浏览器按钮的原生 Windows 应用窗口中，后台继续使用 CLI 自动实验；发布包不包含任何私有语料、历史结果、账号、密钥或真实目标配置。
 
 ## 启动
 
-1. 解压整个压缩包，保留 EXE 与 `_internal` 目录的相对位置。
-2. 双击目录中的 `AgenticIPIWorkbench.exe`。控制台自动在浏览器打开，默认端口 8765；占用时会依次尝试后续端口。
+1. 从 Release 直接下载单文件 `AgenticIPIWorkbench.exe`。
+2. 双击 EXE。工作台会打开独立的 Windows 应用窗口，不再打开外部浏览器；内部本机端口从 8765 开始，占用时会依次尝试后续端口。
 3. 本机实验数据保存在 `%LOCALAPPDATA%\ExperimentWorkbench\experiments`，运行日志在同级 `logs`。重开 EXE 不会删除实验。
 4. 公开包默认附带两条仅作用于逐运行隔离文件的合成示例。可选择整文件夹 Excel 或多个 JSON / JSONL 文件，预览数量、分类与映射后确认导入自己的语料。
 
-控制台本身无需安装 Python 或 Node。执行 Cursor 实验仍需 Cursor CLI、有效登录/额度，以及 CLI 环境中的 MCP Python 包。WSL 模式需要可用发行版。预检会逐项显示缺失依赖；可在设置第 2 步的“登录帮助与运行环境”填写 MCP Python 路径。
+应用本身无需安装 Python 或 Node。Windows 10/11 通常已包含所需的 WebView2 运行时；如果系统裁剪过 Edge 组件，需要先安装 Microsoft Edge WebView2 Runtime。执行 Cursor 实验仍需 Cursor CLI、有效登录/额度，以及 CLI 环境中的 MCP Python 包。WSL 模式需要可用发行版。预检会逐项显示缺失依赖；可在设置第 2 步的“登录帮助与运行环境”填写 MCP Python 路径。
 
 开发项目也可运行 `scripts/start_webui.ps1` 或 `python -m cursor_dynamic_eval.workbench serve`。命令行 `--project <项目目录>` 可让 EXE 查看既有项目；`--data-root <数据目录>` 可指定新实验存放处。默认独立启动不携带旧机器的实验结果、账户或密钥。
 

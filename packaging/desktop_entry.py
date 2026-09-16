@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 def boot():
+    project = None
     if getattr(sys, "frozen", False):
         project = Path(sys._MEIPASS) / "project"
         if "--project" in sys.argv:
@@ -24,9 +25,14 @@ def boot():
             sys.stdout = log_file.open("a", encoding="utf-8", buffering=1)
         if sys.stderr is None:
             sys.stderr = sys.stdout
-    from cursor_dynamic_eval.workbench.__main__ import main
-
     try:
+        if getattr(sys, "frozen", False) and len(sys.argv) == 1:
+            from cursor_dynamic_eval.workbench.desktop import run_desktop
+
+            run_desktop(project)
+            return
+        from cursor_dynamic_eval.workbench.__main__ import main
+
         main()
     except Exception:
         import traceback

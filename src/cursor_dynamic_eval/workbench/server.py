@@ -25,7 +25,14 @@ class LocalServer(ThreadingHTTPServer):
         super().server_bind()
 
 
-def create_server(project: Path, *, host="127.0.0.1", port=8765, service=None):
+def create_server(
+    project: Path,
+    *,
+    host="127.0.0.1",
+    port=8765,
+    service=None,
+    on_shutdown=None,
+):
     if host not in {"127.0.0.1", "localhost"}:
         raise ValueError("实验控制台仅监听本机回环地址")
     app = service or WorkbenchService(project)
@@ -172,7 +179,12 @@ def create_server(project: Path, *, host="127.0.0.1", port=8765, service=None):
                     value = app.control(identifier, path.rsplit("/", 1)[1])
                 elif path == "/api/shutdown":
                     self.respond({"ok": True, "detail": "控制台服务已关闭，独立实验进程继续运行"})
-                    threading.Thread(target=self.server.shutdown, daemon=True).start()
+                    def shutdown():
+                        self.server.shutdown()
+                        if on_shutdown:
+                            on_shutdown()
+
+                    threading.Thread(target=shutdown, daemon=True).start()
                     return
                 else:
                     return self.respond({"ok": False, "error": "未知操作"}, 404)

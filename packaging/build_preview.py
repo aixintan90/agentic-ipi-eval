@@ -6,10 +6,8 @@ import argparse
 import hashlib
 import importlib.metadata
 import json
-import shutil
 import subprocess
 import sys
-import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,7 +50,8 @@ def main():
         "-m",
         "PyInstaller",
         "--noconfirm",
-        "--onedir",
+        "--clean",
+        "--onefile",
         "--windowed",
         "--name",
         executable_name,
@@ -74,6 +73,12 @@ def main():
         "psutil",
         "--collect-submodules",
         "paramiko",
+        "--collect-all",
+        "webview",
+        "--hidden-import",
+        "webview.platforms.edgechromium",
+        "--hidden-import",
+        "clr",
         "--exclude-module",
         "playwright",
         "--exclude-module",
@@ -99,31 +104,15 @@ def main():
             args.extend(["--copy-metadata", plugin.dist.metadata["Name"]])
     args.append(str(ROOT / "packaging" / "desktop_entry.py"))
     subprocess.run(args, cwd=ROOT, check=True)
-    folder = target / executable_name
-    shutil.copy2(ROOT / "docs" / "WORKBENCH_PREVIEW.md", folder / "使用与验收说明.md")
-    shutil.copy2(ROOT / "docs" / "WORKBENCH_ADAPTERS.md", folder / "适配器扩展协议.md")
-    # Offline review package contains only binaries/resources + docs, never live results or keys.
-    files = {
-        str(p.relative_to(folder)): hashlib.sha256(p.read_bytes()).hexdigest()
-        for p in sorted(folder.rglob("*"))
-        if p.is_file()
-    }
-    (folder / "SHA256SUMS.json").write_text(
-        json.dumps(files, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-    archive = target / f"{package_name}-v{VERSION}.zip"
-    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
-        for path in sorted(folder.rglob("*")):
-            if path.is_file():
-                bundle.write(path, executable_name + "/" + path.relative_to(folder).as_posix())
+    executable = target / f"{executable_name}.exe"
     print(
         json.dumps(
             {
-                "exe": str(folder / f"{executable_name}.exe"),
-                "archive": str(archive),
-                "zip_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+                "exe": str(executable),
+                "exe_sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
                 "public": options.public,
                 "bundled_corpus": corpus_name,
+                "shell": "native-webview2",
             },
             indent=2,
         )
