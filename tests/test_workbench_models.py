@@ -50,6 +50,11 @@ def test_new_default_does_not_relabel_explicit_auto(tmp_path):
     assert normalize({"target": {"model": "auto"}}, tmp_path)["target"]["model"] == "auto"
 
 
+def test_mcp_python_environment_override_is_stable(tmp_path, monkeypatch):
+    monkeypatch.setenv("CURSOR_EVAL_MCP_PYTHON", "/opt/agentic-ipi/bin/python")
+    assert defaults(tmp_path)["target"]["mcp_python"] == "/opt/agentic-ipi/bin/python"
+
+
 def test_public_bundle_uses_synthetic_corpus_when_teacher_corpus_is_absent(tmp_path):
     assert defaults(tmp_path)["corpus"] == "config/corpora/workbench_example.json"
 

@@ -15,11 +15,44 @@ from ..automation.corpus import load_corpus
 from .models import DEFAULT_CURSOR_MODEL
 
 
+def _default_mcp_python(project: Path, bridge: str) -> str:
+    """Choose a stable interpreter path; never persist PyInstaller's _MEI path."""
+
+    configured = os.environ.get("CURSOR_EVAL_MCP_PYTHON", "").strip()
+    if configured:
+        return configured
+    if bridge != "wsl":
+        return (project / ".venv/bin/python").resolve().as_posix()
+
+    candidate_roots = [project, Path.cwd(), *Path.cwd().parents]
+    for base in candidate_roots:
+        for root in (base, base / "cursor_dynamic_eval"):
+            if (root / ".venv-wsl/pyvenv.cfg").is_file():
+                return PathBridge(mode="wsl").to_cli_path(root / ".venv-wsl/bin/python")
+
+    # A one-file EXE runs from a disposable _MEI directory. Look only two
+    # levels deep on fixed drives for a source checkout with the WSL venv.
+    for letter in "CDEFGHIJKLMNOPQRSTUVWXYZ":
+        drive = Path(f"{letter}:/")
+        if not drive.exists():
+            continue
+        try:
+            markers = drive.glob("*/cursor_dynamic_eval/.venv-wsl/pyvenv.cfg")
+            marker = next(markers, None)
+        except OSError:
+            marker = None
+        if marker:
+            return PathBridge(mode="wsl").to_cli_path(marker.parent / "bin/python")
+
+    # This gives an actionable missing-package error instead of a guaranteed
+    # dead path under %TEMP%/_MEI*. The settings page remains editable.
+    return "python3"
+
+
 def defaults(project: Path) -> dict:
     from .egress import settings
 
     bridge = "wsl" if os.name == "nt" else "native"
-    python_path = project / (".venv-wsl/bin/python" if bridge == "wsl" else ".venv/bin/python")
     internal_corpus = project / "config/corpora/teacher_new_windows_full.json"
     bundled_corpus = (
         "config/corpora/teacher_new_windows_full.json"
@@ -38,7 +71,7 @@ def defaults(project: Path) -> dict:
             "model": DEFAULT_CURSOR_MODEL,
             "bridge": bridge,
             "wsl_distro": "Ubuntu",
-            "mcp_python": PathBridge(mode=bridge).to_cli_path(python_path),
+            "mcp_python": _default_mcp_python(project, bridge),
         },
         "generation": {
             "strategy": "thought_tree",
