@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentic-ipi-eval"
-version = "1.0.3"
+version = "1.0.4"
 description = "Evidence-backed workbench for agentic indirect prompt-injection evaluation"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -2,13 +2,13 @@
 
 一个可扩展、证据驱动的 Agent 间接提示注入（Indirect Prompt Injection, IPI）自动化实验工作台。
 
-当前正式版本为 `v1.0.3`。它提供原生 Windows 应用窗口、思维树 Prompt 生成、已有成功 Prompt 复测、并发 CLI 调度、暂停恢复、逐 Prompt 证据账本、Effect-ASR 汇总，以及 Excel / JSON / Markdown 导出。
+当前正式版本为 `v1.0.4`。它提供原生 Windows 应用窗口、思维树 Prompt 生成、已有成功 Prompt 复测、并发 CLI 调度、暂停恢复、逐 Prompt 证据账本、Effect-ASR 汇总，以及 Excel / JSON / Markdown 导出。
 
 > 发行包已适配当前固定的 12 个老师 Windows 工作簿，可自动识别 1080 条用例。它不包含原始 Excel、未脱敏原始指令、历史实验结果、账号、API 密钥、邮件凭据或服务器配置。
 
 ## 下载与启动
 
-从仓库的 Releases 页面直接下载 `AgenticIPIWorkbench-v1.0.3.exe`，核对 SHA-256 后双击运行。它是单文件程序，不需要解压，也不会打开 Edge 或 Chrome 标签页。首次使用请同时阅读 [小白操作指南](docs/BEGINNER_GUIDE.md)。
+从仓库的 Releases 页面直接下载 `AgenticIPIWorkbench-v1.0.4.exe`，核对 SHA-256 后双击运行。它是单文件程序，不需要解压，也不会打开 Edge 或 Chrome 标签页。首次使用请同时阅读 [小白操作指南](docs/BEGINNER_GUIDE.md)。
 
 应用内部仍使用仅监听 `127.0.0.1` 的本机服务来隔离执行进程，但界面显示在无地址栏、无浏览器按钮的 Windows 桌面窗口中。端口占用时会自动尝试后续端口。实验数据默认保存在：
 

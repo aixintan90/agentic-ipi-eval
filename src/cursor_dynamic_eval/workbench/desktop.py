@@ -3,11 +3,40 @@
 from __future__ import annotations
 
 import os
+import shutil
 import threading
 from pathlib import Path
 
 from .server import create_server
 from .service import WorkbenchService
+
+
+class DesktopApi:
+    """Native-only operations that require an explicit Windows file dialog."""
+
+    def __init__(self, service: WorkbenchService, window_ref: dict[str, object], webview_module):
+        self.service = service
+        self.window_ref = window_ref
+        self.webview = webview_module
+
+    def save_export(self, identifier: str, filename: str) -> dict:
+        source = self.service.download(identifier, filename).resolve()
+        window = self.window_ref.get("window")
+        if window is None:
+            raise RuntimeError("桌面窗口尚未就绪")
+        selected = window.create_file_dialog(
+            self.webview.SAVE_DIALOG,
+            directory=str(Path.home() / "Downloads"),
+            save_filename=source.name,
+        )
+        if not selected:
+            return {"saved": False, "path": ""}
+        chosen = selected if isinstance(selected, str) else selected[0]
+        destination = Path(chosen).resolve()
+        if destination != source:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+        return {"saved": True, "path": str(destination)}
 
 
 def default_data_root() -> Path:
@@ -33,6 +62,7 @@ def run_desktop(
 
     service = WorkbenchService(project, data_root or default_data_root())
     window_ref: dict[str, object] = {}
+    desktop_api = DesktopApi(service, window_ref, webview_module)
 
     def close_window() -> None:
         window = window_ref.get("window")
@@ -66,6 +96,7 @@ def run_desktop(
         width=1280,
         height=820,
         min_size=(960, 640),
+        js_api=desktop_api,
         resizable=True,
         background_color="#F4F7F9",
         text_select=True,

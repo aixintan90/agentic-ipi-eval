@@ -19,6 +19,14 @@ function toast(message) { $("#toast").textContent=message;$("#toast").hidden=fal
 function error(message) { $("#global-error").textContent=message;$("#global-error").hidden=!message; }
 function badge(value,label) { return '<span class="badge '+esc(value)+'">'+esc(label||phases[value]||value)+'</span>'; }
 function linkFile(file) { return "/api/download?"+new URLSearchParams({id:state.selected,file}); }
+async function saveExport(file) {
+  if(window.pywebview?.api?.save_export){
+    const result=await window.pywebview.api.save_export(state.selected,file);
+    toast(result.saved?"已保存到："+result.path:"已取消保存");
+    return;
+  }
+  const a=document.createElement("a");a.href=linkFile(file);a.download=file;a.click();
+}
 function downloadObject(value,filename) {
   const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)+"\n"],{type:"application/json"}));
   const a=document.createElement("a");a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -228,10 +236,11 @@ function renderExports() {
   $("#export-status").textContent=metricText(s.metric)+" · "+(s.final_rate==null?"尚未全部完成，当前为阶段结果":"全部完成")+" · 未完成及连接错误不计为普通失败";
   const labels={"report.md":"实验简报","aggregate_tables.xlsx":"结果表格","successful_prompts.json":"成功提示词","successful_prompts.jsonl":"成功提示词（逐行 JSON）","prompt_level_ledger.jsonl":"全部有效提示词记录","case_level_ledger.jsonl":"逐条用例结果","summary.json":"统计摘要","email_receipts.json":"邮件人工确认记录","transport_evidence.json":"传输回执"};
   const core=["report.md","aggregate_tables.xlsx","successful_prompts.json"];
-  const row=f=>'<a class="download-row" href="'+linkFile(f)+'" download><div><strong>'+esc(labels[f]||f)+'</strong><small>'+esc(f)+'</small></div><span>下载 ↓</span></a>';
+  const row=f=>'<button type="button" class="download-row" data-save-file="'+esc(f)+'"><div><strong>'+esc(labels[f]||f)+'</strong><small>'+esc(f)+'</small></div><span>选择保存位置…</span></button>';
   const files=d.files||[];
   $("#export-files").innerHTML=core.filter(f=>files.includes(f)).map(row).join("")||'<p class="empty-message">'+(s.completed?"已有记录，点击“更新报告”生成下载文件。":"还没有实验结果。运行后可在这里下载。")+'</p>';
   $("#extra-export-files").innerHTML=files.filter(f=>!core.includes(f)).map(row).join("");$("#other-exports").hidden=!files.some(f=>!core.includes(f));
+  $$('[data-save-file]').forEach(button=>button.onclick=()=>action(()=>saveExport(button.dataset.saveFile),button));
   const replay=d.config?.workflow?.mode==="replay_then_tree";
   $("#category-summary").innerHTML='<div class="table-scroll"><table><thead><tr><th>攻击类别</th><th>计划</th><th>已完成</th><th>成功</th>'+(replay?'<th>直接复测成功</th><th>思维树挽回</th>':'')+'<th>阶段成功率</th><th>最终成功率</th></tr></thead><tbody>'+s.categories.map(c=>'<tr><td>'+esc(c.category)+'</td><td>'+num(c.scheduled)+'</td><td>'+num(c.completed)+'</td><td>'+num(c.succeeded)+'</td>'+(replay?'<td>'+num(c.direct_replay_succeeded)+'</td><td>'+num(c.thought_tree_recovered)+'</td>':'')+'<td>'+pct(c.observed_rate)+'</td><td>'+pct(c.final_rate)+'</td></tr>').join("")+'</tbody></table></div>';
 }

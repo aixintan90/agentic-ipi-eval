@@ -21,13 +21,13 @@
 
 从 GitHub Releases 下载最新版：
 
-- AgenticIPIWorkbench-v1.0.3.exe
+- AgenticIPIWorkbench-v1.0.4.exe
 - 同一 Release 页面公布的 SHA-256
 
 PowerShell 中核对文件：
 
 ~~~powershell
-Get-FileHash .\AgenticIPIWorkbench-v1.0.3.exe -Algorithm SHA256
+Get-FileHash .\AgenticIPIWorkbench-v1.0.4.exe -Algorithm SHA256
 ~~~
 
 输出必须与 Release 页面一致。EXE 暂未代码签名，Windows 可能显示“未知发布者”。只有哈希一致且下载来源正确时才继续。

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from cursor_dynamic_eval.workbench.desktop import run_desktop
+from cursor_dynamic_eval.workbench.desktop import DesktopApi, run_desktop
 
 
 class FakeEvent:
@@ -20,8 +20,13 @@ class FakeWindow:
     def destroy(self):
         self.destroyed = True
 
+    def create_file_dialog(self, *args, **kwargs):
+        return self.save_path
+
 
 class FakeWebview:
+    SAVE_DIALOG = 30
+
     def __init__(self):
         self.window = FakeWindow()
         self.created = None
@@ -49,3 +54,22 @@ def test_desktop_shell_opens_local_service_without_browser_chrome(tmp_path):
     assert options["zoomable"] is False
     assert fake.started["gui"] == "edgechromium"
     assert fake.started["debug"] is False
+
+
+def test_desktop_api_copies_export_to_user_selected_path(tmp_path):
+    source = tmp_path / "report.md"
+    source.write_text("report", encoding="utf-8")
+    destination = tmp_path / "chosen" / "my-report.md"
+
+    class Service:
+        def download(self, identifier, filename):
+            assert identifier == "exp-1"
+            assert filename == "report.md"
+            return source
+
+    window = FakeWindow()
+    window.save_path = str(destination)
+    api = DesktopApi(Service(), {"window": window}, FakeWebview())
+
+    assert api.save_export("exp-1", "report.md") == {"saved": True, "path": str(destination)}
+    assert destination.read_text(encoding="utf-8") == "report"

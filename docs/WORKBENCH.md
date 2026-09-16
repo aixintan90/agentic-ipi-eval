@@ -1,4 +1,4 @@
-# Agentic IPI Workbench 1.0.3
+# Agentic IPI Workbench 1.0.4
 
 这是正式发行版。界面运行在无地址栏、无浏览器按钮的原生 Windows 应用窗口中，后台继续使用 CLI 自动实验。正式 EXE 已适配当前固定老师工作簿，不包含原始 Excel、未脱敏指令、历史结果、账号、密钥、邮件凭据或服务器配置。
 
