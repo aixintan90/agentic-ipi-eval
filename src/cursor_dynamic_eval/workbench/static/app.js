@@ -4,7 +4,7 @@ const $$ = s => [...document.querySelectorAll(s)];
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const phases = {ready:"待开始",starting:"正在启动",running:"运行中",pausing:"正在暂停",paused:"已暂停",stopping:"正在结束",stopped:"已结束",completed:"已完成",blocked:"需要处理",incomplete:"有待补跑用例",interrupted:"运行已中断",error:"需要处理",historical:"历史结果 · 只读"};
 const outcomes = {success:"成功",failed:"未成功",pending:"未完成"};
-const state = {bootstrap:null,experiments:[],selected:null,detail:null,tab:"readiness",page:1,editing:null,config:null,busy:false,serial:0,setupOpen:false,step:0,maxStep:0,closed:false,receiptPage:1,auditMappingFile:null};
+const state = {bootstrap:null,experiments:[],selected:null,detail:null,tab:"readiness",page:1,editing:null,config:null,busy:false,serial:0,setupOpen:false,step:0,maxStep:0,closed:false,receiptPage:1};
 const pct = n => n == null ? "—" : (n * 100).toFixed(2) + "%";
 const num = n => Number(n || 0).toLocaleString("zh-CN");
 const field = name => $("#config-form").elements.namedItem(name);
@@ -253,7 +253,6 @@ function openConfig(mode="new",step=0) {
   state.corpusCount=mode!=="new"?state.detail.summary.total:state.bootstrap.default_corpus?.case_count;
   state.baselineCount=mode!=="new"?state.detail.manifest.baseline_prompt_count||null:null;
   state.baselineModels=[];
-  state.auditMappingFile=null;
   state.setupOpen=true;state.maxStep=mode==="edit"?2:0;
   $("#form-title").textContent=mode==="edit"?"修改实验设置":mode==="clone"?"复制为新实验":"新建实验";
   $("#form-error").textContent="";$("#adapter-select").innerHTML=state.bootstrap.adapters.map(a=>'<option value="'+esc(a.id)+'" '+(a.available?"":"disabled")+'>'+esc(a.id==="cursor_cli"?"Cursor":a.available?a.label:a.label+"（暂不可用）")+'</option>').join("");
@@ -271,7 +270,7 @@ function fillForm() {
     if(!f.name)continue;let value=state.config;for(const p of f.name.split("."))value=value?.[p];
     if(f.type==="checkbox")f.checked=!!value;else f.value=Array.isArray(value)?value.join(", "):value??"";
   }
-  updateOptions();renderCorpusChoice();renderAuditMappingChoice();renderBaselineChoice();loadModels();
+  updateOptions();renderCorpusChoice();renderBaselineChoice();loadModels();
 }
 function modelLabel(id,label=id) {
   if(id==="cursor-grok-4.6-high")return "Grok 4.6 · High";
@@ -327,14 +326,7 @@ function readForm() {
   return config;
 }
 function renderCorpusChoice() {
-  $("#use-builtin").hidden=field("corpus").value===state.bootstrap.defaults.corpus;
   $("#selected-corpus").innerHTML='<strong>'+esc(state.corpusLabel||"尚未选择用例")+'</strong><small>'+(state.corpusCount!=null?num(state.corpusCount)+" 条用例":"保存时核对用例数量")+'</small>';
-}
-function renderAuditMappingChoice() {
-  const file=state.auditMappingFile;
-  $("#audit-mapping-summary").innerHTML=file
-    ?'<strong>'+esc(file.name)+'</strong><small>导入老师原始 Excel 时用于核对执行映射</small>'
-    :'<strong>未选择审核映射</strong><small>标准用例无需选择；老师原始 Excel 需要对应的 JSON 映射</small>';
 }
 function renderBaselineChoice() {
   const label=field("workflow.baseline_prompt_label").value||"尚未选择已有成功 Prompt 文件";
@@ -396,17 +388,16 @@ async function saveConfig(event) {
 }
 async function importFiles(event) {
   const selected=[...event.target.files];event.target.value="";
-  const sourceFiles=selected.filter(f=>/\.(xlsx|jsonl?)$/i.test(f.name)&&!f.name.startsWith("~$"));
+  const sourceFiles=selected.filter(f=>/\.xlsx$/i.test(f.name)&&!f.name.startsWith("~$"));
   const files=[...sourceFiles];
-  if(state.auditMappingFile&&!files.some(f=>f.name===state.auditMappingFile.name&&f.size===state.auditMappingFile.size))files.push(state.auditMappingFile);
-  if(!files.length){$("#form-error").textContent="请选择 Excel、JSON 或 JSONL 文件。";return;}
+  if(!files.length){$("#form-error").textContent="所选文件夹中没有 Excel 用例文件。";return;}
   state.importToken=null;$("#import-dialog").showModal();$("#confirm-import").disabled=true;$("#import-preview").textContent="正在核对文件…";
   try {
     if(files.reduce((n,f)=>n+f.size,0)>20000000)throw Error("文件总大小不能超过 20 MB");
     const content=await Promise.all(files.map(async f=>{const bytes=new Uint8Array(await f.arrayBuffer());let binary="";for(let i=0;i<bytes.length;i+=16384)binary+=String.fromCharCode(...bytes.subarray(i,i+16384));return {filename:f.name,base64:btoa(binary)};}));
-    const result=await api("/api/preview-corpus",{files:content});state.importToken=result.token;state.importLabel=sourceFiles.length===1?sourceFiles[0].name:sourceFiles.length+" 个用例文件";
+    const result=await api("/api/preview-corpus",{files:content});state.importToken=result.token;state.importLabel=sourceFiles.length+" 个老师 Windows Excel";
     $("#import-preview").innerHTML='<p><strong>'+num(result.case_count)+' 条可用用例</strong> · '+Object.keys(result.categories).length+' 个分类</p>'+
-      (result.mapping?'<p class="field-hint">审核映射：'+esc(result.mapping.filename)+'（'+(result.mapping.kind==="uploaded"?'本机选择':'程序内置')+'）</p>':'')+
+      (result.mapping?.kind==="bundled"?'<p class="field-hint">已识别为当前固定工作簿版本。</p>':'')+
       (result.problems.length?'<ul class="inline-error">'+result.problems.map(p=>'<li>'+esc(p)+'</li>').join("")+'</ul>':'<p class="field-hint">已核对全部 '+num(result.source_case_count)+' 条源用例，原文件不会修改。</p>')+
       '<div class="table-scroll"><table><thead><tr><th>文件 / 工作表</th><th>用例数</th></tr></thead><tbody>'+result.sheets.map(s=>'<tr><td>'+esc(s.file)+'<br><small>'+esc(s.sheet)+'</small></td><td>'+num(s.rows)+'</td></tr>').join("")+'</tbody></table></div>'+
       '<details><summary>分类与解析详情</summary><pre class="raw-json">'+esc(JSON.stringify({categories:result.categories,sheets:result.sheets,sample:result.sample},null,2))+'</pre></details>';
@@ -475,7 +466,6 @@ for(const name of ["target.adapter","target.bridge"])field(name).onchange=loadMo
 field("target.wsl_distro").oninput=()=>{state.models=null;state.modelsTarget=null;state.modelSerial=(state.modelSerial||0)+1;field("target.model").disabled=true;$("#refresh-models").disabled=false;$("#model-status").textContent="运行环境已更改，请刷新模型列表。";};
 field("target.wsl_distro").onchange=loadModels;
 field("corpus").oninput=()=>{state.corpusLabel=field("corpus").value.split(/[\\/]/).pop();state.corpusCount=null;renderCorpusChoice();};
-$("#use-builtin").onclick=()=>{field("corpus").value=state.bootstrap.defaults.corpus;field("platform").value="windows";state.corpusLabel="内置 Windows 用例";state.corpusCount=state.bootstrap.default_corpus?.case_count;renderCorpusChoice();};
 $("#import-config").onchange=async event=>{
   try {
     const file=event.target.files[0];if(!file)return;
@@ -487,14 +477,7 @@ $("#import-config").onchange=async event=>{
     fillForm();toast("配置已载入，请核对这台电脑的连接");
   }catch(e){$("#form-error").textContent=e.message;}finally{event.target.value="";}
 };
-$("#import-corpus").onchange=importFiles;$("#import-folder").onchange=importFiles;
-$("#import-audit-mapping").onchange=event=>{
-  const file=event.target.files[0];event.target.value="";
-  if(!file)return;
-  if(!/\.json$/i.test(file.name)){$("#form-error").textContent="审核映射必须是 JSON 文件。";return;}
-  if(file.size>20000000){$("#form-error").textContent="审核映射不能超过 20 MB。";return;}
-  state.auditMappingFile=file;$("#form-error").textContent="";renderAuditMappingChoice();
-};
+$("#import-folder").onchange=importFiles;
 $("#import-baseline").onchange=importBaseline;
 $("#clear-baseline").onclick=()=>{field("workflow.baseline_prompt_file").value="";field("workflow.baseline_prompt_label").value="";state.baselineCount=null;state.baselineModels=[];renderBaselineChoice();};
 $("#confirm-import").onclick=()=>action(async()=>{

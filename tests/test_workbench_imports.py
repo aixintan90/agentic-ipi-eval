@@ -62,7 +62,7 @@ def test_new_teacher_workbook_requires_reviewed_mapping(tmp_path):
     _, result = preview([encode("teacher.xlsx", excel(rows))], tmp_path)
     assert not result["can_import"] and result["source_case_count"] == 1
     assert result["case_count"] == 0
-    assert any("审核映射" in p for p in result["problems"])
+    assert any("不是当前支持的老师 Windows 工作簿版本" in p for p in result["problems"])
 
 
 def test_teacher_workbook_accepts_separately_uploaded_audit_mapping(tmp_path):

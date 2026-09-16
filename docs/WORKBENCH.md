@@ -1,13 +1,13 @@
-# Agentic IPI Workbench 1.0.0
+# Agentic IPI Workbench 1.0.1
 
-这是正式发行版。界面运行在无地址栏、无浏览器按钮的原生 Windows 应用窗口中，后台继续使用 CLI 自动实验；发布包不包含任何私有语料、历史结果、账号、密钥、邮件凭据或服务器配置。
+这是正式发行版。界面运行在无地址栏、无浏览器按钮的原生 Windows 应用窗口中，后台继续使用 CLI 自动实验。正式 EXE 已适配当前固定老师工作簿，不包含原始 Excel、未脱敏指令、历史结果、账号、密钥、邮件凭据或服务器配置。
 
 ## 启动
 
 1. 从 Release 直接下载单文件 `AgenticIPIWorkbench.exe`。
 2. 双击 EXE。工作台会打开独立的 Windows 应用窗口，不再打开外部浏览器；内部本机端口从 8765 开始，占用时会依次尝试后续端口。
 3. 本机实验数据保存在 `%LOCALAPPDATA%\ExperimentWorkbench\experiments`，运行日志在同级 `logs`。重开 EXE 不会删除实验。
-4. 公开包默认附带两条仅作用于逐运行隔离文件的合成示例。可选择整文件夹 Excel 或多个 JSON / JSONL 文件，预览数量、分类与映射后确认导入自己的语料。非标准老师原始 Excel 还需在同一步选择本机审核映射 JSON。
+4. 直接选择当前固定的老师 Windows Excel 文件夹，即可核对并导入 12 个工作簿、1080 条用例和 12 个分类。无需选择审核用例或映射文件。
 
 应用本身无需安装 Python 或 Node。Windows 10/11 通常已包含所需的 WebView2 运行时；如果系统裁剪过 Edge 组件，需要先安装 Microsoft Edge WebView2 Runtime。执行 Cursor 实验仍需 Cursor CLI、有效登录/额度，以及 CLI 环境中的 MCP Python 包。WSL 模式需要可用发行版。预检会逐项显示缺失依赖；可在设置第 2 步的“登录帮助与运行环境”填写 MCP Python 路径。
 

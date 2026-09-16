@@ -241,18 +241,17 @@ def preview(files: list, project: Path) -> tuple[dict, dict]:
                         "file": name,
                         "sheet": sheet.title,
                         "rows": count,
-                        "mode": "已核验的老师原表映射"
+                        "mode": "已识别的固定工作簿"
                         if mapping
                         else "标准字段"
                         if standard
-                        else "缺少执行映射",
+                        else "不是当前支持的工作簿版本",
                     }
                 )
                 if teacher and not mapping:
                     problems.append(
-                        f"{name}/{sheet.title}：{count} 条原表用例没有匹配的审核映射。"
-                        "请选择与这批 Excel 同时生成的审核映射 JSON；若原表已修改，"
-                        "需重新审核生成映射，不能套用旧版本。"
+                        f"{name}/{sheet.title}：不是当前支持的老师 Windows 工作簿版本。"
+                        "请使用未经修改的固定 Excel；如果老师更新了文件，需要先重新适配。"
                     )
         finally:
             workbook.close()

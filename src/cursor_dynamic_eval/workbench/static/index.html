@@ -28,15 +28,13 @@
       <section class="setup-step" data-setup-step="0">
         <h2 tabindex="-1">选择这次要测试的用例</h2>
         <label>实验名称<input name="name" required maxlength="160"></label>
-        <div class="field-heading">用例文件</div>
-        <div class="file-actions"><label class="secondary file-label" tabindex="0">选择 Excel 文件夹<input id="import-folder" type="file" webkitdirectory multiple hidden></label><label class="secondary file-label" tabindex="0">选择文件<input id="import-corpus" type="file" accept=".xlsx,.json,.jsonl" multiple hidden></label><label class="secondary file-label" tabindex="0">选择审核映射<input id="import-audit-mapping" type="file" accept=".json" hidden></label></div>
-        <div id="audit-mapping-summary" class="selection-summary compact" role="status"></div>
+        <div class="field-heading">老师 Windows 用例</div>
+        <div class="file-actions"><label class="secondary file-label" tabindex="0">选择 Excel 文件夹<input id="import-folder" type="file" webkitdirectory multiple hidden></label></div>
         <div id="selected-corpus" class="selection-summary" role="status"></div>
-        <button id="use-builtin" type="button" class="text-button">使用内置 Windows 用例</button>
         <div class="form-section"><h3>Prompt 流程</h3><label>运行方式<select name="workflow.mode"><option value="thought_tree">全部用例直接使用思维树（默认）</option><option value="replay_then_tree">先复测已有成功 Prompt，失败项再使用思维树</option></select></label>
           <div id="baseline-options" hidden><p class="field-hint">从本机选择上一轮导出的 successful_prompts.json 或 JSONL。本轮只测试能按 case_id 匹配到已有 Prompt 的用例；重新上传即可更换下一轮输入。</p><div class="file-actions"><label class="secondary file-label" tabindex="0">选择已有成功 Prompt<input id="import-baseline" type="file" accept=".json,.jsonl" hidden></label><button id="clear-baseline" type="button" class="text-button">清除文件</button></div><input name="workflow.baseline_prompt_file" type="hidden"><input name="workflow.baseline_prompt_label" type="hidden"><div id="baseline-summary" class="selection-summary" role="status"></div></div>
         </div>
-        <details><summary>其他导入方式</summary><div class="details-body"><label class="secondary file-label" tabindex="0">导入已有实验配置<input id="import-config" type="file" accept=".json" hidden></label><label>用例文件路径<input name="corpus" required></label><label>用例系统<select name="platform"><option value="windows">Windows</option><option value="linux">Linux</option><option value="macos">macOS</option></select></label></div></details>
+        <details><summary>已有实验配置</summary><div class="details-body"><label class="secondary file-label" tabindex="0">导入配置文件<input id="import-config" type="file" accept=".json" hidden></label><label>用例文件路径<input name="corpus" required></label><label>用例系统<select name="platform"><option value="windows">Windows</option><option value="linux">Linux</option><option value="macos">macOS</option></select></label></div></details>
       </section>
       <section class="setup-step" data-setup-step="1" hidden>
         <h2 tabindex="-1">连接被测软件与提示词生成模型</h2>
@@ -86,7 +84,7 @@
 <dialog id="stop-dialog"><div class="dialog-heading"><h2>结束本轮实验？</h2></div><p>记录会保留，但本轮不能再恢复。想稍后继续，请使用“暂停实验”。</p><div class="dialog-footer"><button class="secondary" data-close="stop-dialog">返回</button><button class="danger" id="confirm-stop">结束并保留记录</button></div></dialog>
 <dialog id="close-dialog"><div class="dialog-heading"><h2>退出工作台？</h2></div><p>后台实验不会停止。如果想停下实验，请先暂停。</p><div class="dialog-footer"><button class="secondary" data-close="close-dialog">返回</button><button class="secondary" id="confirm-close">退出工作台</button></div></dialog>
 <dialog id="help-dialog"><div class="dialog-heading"><h2>使用帮助</h2><button class="close" data-close="help-dialog" aria-label="关闭">×</button></div>
-  <details open><summary>第一次使用</summary><div class="details-body"><ol><li>新建实验，选择用例文件。</li><li>填写模型、API 地址和密钥。</li><li>保存设置，检查连接并处理未通过项。</li><li>点击开始实验，核对条件后确认。</li><li>在“实验结果”下载报告和成功提示词。</li></ol></div></details>
+  <details open><summary>第一次使用</summary><div class="details-body"><ol><li>新建实验，选择老师 Windows Excel 所在文件夹。</li><li>填写模型、API 地址和密钥。</li><li>保存设置，检查连接并处理未通过项。</li><li>点击开始实验，核对条件后确认。</li><li>在“实验结果”下载报告和成功提示词。</li></ol></div></details>
   <details><summary>什么时候使用“已有 Prompt 先复测”？</summary><p>只有需要验证其他模型能否复现上一轮成功结果时才选择。上传上一轮导出的 successful_prompts.json 或 JSONL；系统先原样复测，直接未成功的用例才进入 8→4→2 思维树。普通实验继续选择默认流程，不需要上传该文件。</p></details>
   <details><summary>关闭页面后还会继续运行吗？</summary><p>会。需要停止派发新用例时，请点击“暂停实验”；稍后可恢复。</p></details>
   <details><summary>成功率表示什么？</summary><p>新实验只统计可验证效果：单纯生成命令或调用工具不算成功。隔离目标须验证状态变化；邮件须由 SMTP 服务器接受；上传须远端回读一致。邮件收件箱确认另行记录。未完成与连接错误不计作普通失败。</p></details>

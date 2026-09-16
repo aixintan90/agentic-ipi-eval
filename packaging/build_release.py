@@ -23,6 +23,11 @@ def _arguments():
         action="store_true",
         help="Bundle only the synthetic example corpus and use the public product name.",
     )
+    parser.add_argument(
+        "--audit-mapping",
+        type=Path,
+        help="Bundle an audited workbook mapping used for automatic Excel recognition.",
+    )
     return parser.parse_args()
 
 
@@ -98,6 +103,16 @@ def main():
     ]
     for name in config_files:
         args.extend(["--add-data", f"{ROOT / 'config' / name};project/config"])
+    if options.audit_mapping:
+        audit_mapping = options.audit_mapping.resolve()
+        if not audit_mapping.is_file():
+            raise FileNotFoundError(audit_mapping)
+        args.extend(
+            [
+                "--add-data",
+                f"{audit_mapping};project/config/corpora",
+            ]
+        )
     for plugin in importlib.metadata.entry_points(group="cursor_dynamic_eval.adapters"):
         args.extend(["--collect-submodules", plugin.value.split(":", 1)[0].split(".", 1)[0]])
         if plugin.dist:

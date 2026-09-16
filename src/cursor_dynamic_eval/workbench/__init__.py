@@ -1,3 +1,3 @@
 """Configurable local experiment workbench; execution lives outside the web process."""
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"

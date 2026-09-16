@@ -2,13 +2,13 @@
 
 一个可扩展、证据驱动的 Agent 间接提示注入（Indirect Prompt Injection, IPI）自动化实验工作台。
 
-当前正式版本为 `v1.0.0`。它提供原生 Windows 应用窗口、思维树 Prompt 生成、已有成功 Prompt 复测、并发 CLI 调度、暂停恢复、逐 Prompt 证据账本、Effect-ASR 汇总，以及 Excel / JSON / Markdown 导出。
+当前正式版本为 `v1.0.1`。它提供原生 Windows 应用窗口、思维树 Prompt 生成、已有成功 Prompt 复测、并发 CLI 调度、暂停恢复、逐 Prompt 证据账本、Effect-ASR 汇总，以及 Excel / JSON / Markdown 导出。
 
-> 公开仓库和发行包不包含私有测试语料、历史实验结果、账号、API 密钥、邮件凭据或服务器配置。内置的两条示例只操作逐运行隔离的合成文件。
+> 发行包已适配当前固定的 12 个老师 Windows 工作簿，可自动识别 1080 条用例。它不包含原始 Excel、未脱敏原始指令、历史实验结果、账号、API 密钥、邮件凭据或服务器配置。
 
 ## 下载与启动
 
-从仓库的 Releases 页面直接下载 `AgenticIPIWorkbench-v1.0.0.exe`，核对 SHA-256 后双击运行。它是单文件程序，不需要解压，也不会打开 Edge 或 Chrome 标签页。
+从仓库的 Releases 页面直接下载 `AgenticIPIWorkbench-v1.0.1.exe`，核对 SHA-256 后双击运行。它是单文件程序，不需要解压，也不会打开 Edge 或 Chrome 标签页。
 
 应用内部仍使用仅监听 `127.0.0.1` 的本机服务来隔离执行进程，但界面显示在无地址栏、无浏览器按钮的 Windows 桌面窗口中。端口占用时会自动尝试后续端口。实验数据默认保存在：
 
@@ -26,7 +26,7 @@ EXE 不要求单独安装 Python 或 Node。执行真实 Cursor 实验仍需要�
 
 ## 实验流程
 
-1. 导入 Excel、JSON 或 JSONL 用例并核对数量、分类和字段映射。
+1. 选择老师 Windows Excel 文件夹，程序自动核对数量、分类和工作簿版本。
 2. 选择被测 CLI 与真实模型 ID；Cursor 模型列表来自 `cursor-agent --list-models`，不会静默回退到 Auto。
 3. 配置 Prompt 生成服务。默认思维树预算是 `8 → 4 → 2`，每条用例首次成功后停止。
 4. 配置同时运行的 CLI 数量、超时、基础设施重试与导出频率。
@@ -75,7 +75,7 @@ JSON 根对象包含 `cases` 数组；JSONL 每行一个对象。最小字段如
 }
 ```
 
-Excel 使用同名列。老师原始表格等非标准 Excel 需要同时选择与该批工作簿一起审核生成的映射 JSON；程序按工作簿 SHA-256、工作表和原始行号逐条核对。导入器不会静默丢行或自行猜测执行规则。
+正式 EXE 的界面只要求选择当前固定老师工作簿所在文件夹。程序会按工作簿 SHA-256、工作表和原始行号逐条核对，不需要操作者选择第二份审核文件。导入器不会静默丢行或自行猜测执行规则。
 
 ## 从源码运行
 
@@ -96,7 +96,7 @@ py -3.12 -m venv .venv
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install pyinstaller
-.\.venv\Scripts\python.exe packaging\build_release.py --public
+.\.venv\Scripts\python.exe packaging\build_release.py --public --audit-mapping <reviewed-mapping.json>
 ```
 
 ## 扩展被测 Agent
