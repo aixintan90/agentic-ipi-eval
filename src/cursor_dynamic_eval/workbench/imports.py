@@ -15,12 +15,90 @@ from openpyxl import load_workbook
 from ..automation.corpus import _case_from_dict
 
 
+def _reference_mapping(value: object) -> dict | None:
+    """Return a normalized audited workbook mapping, if ``value`` is one."""
+
+    if not isinstance(value, dict):
+        return None
+    source = value.get("source")
+    rows = value.get("cases")
+    hashes = source.get("workbook_sha256") if isinstance(source, dict) else None
+    if not isinstance(hashes, dict) or not hashes or not isinstance(rows, list) or not rows:
+        return None
+    normalized = []
+    coordinates = set()
+    for index, row in enumerate(rows, 1):
+        case = asdict(_case_from_dict(row, index=index))
+        metadata = case.get("metadata") or {}
+        coordinate = (
+            str(metadata.get("source_workbook") or "").strip(),
+            str(metadata.get("source_sheet") or "").strip(),
+            metadata.get("source_row"),
+        )
+        if not all(coordinate) or not isinstance(coordinate[2], int):
+            raise ValueError(f"审核映射第 {index} 条缺少原工作簿、工作表或行号")
+        if coordinate in coordinates:
+            raise ValueError(f"审核映射包含重复源坐标：{coordinate}")
+        coordinates.add(coordinate)
+        normalized.append(case)
+    clean_hashes = {
+        Path(str(name)).name: str(digest).strip().lower()
+        for name, digest in hashes.items()
+        if str(name).strip() and str(digest).strip()
+    }
+    if not clean_hashes:
+        raise ValueError("审核映射没有工作簿 SHA-256")
+    return {**value, "source": {**source, "workbook_sha256": clean_hashes}, "cases": normalized}
+
+
 def preview(files: list, project: Path) -> tuple[dict, dict]:
     if not isinstance(files, list) or not 1 <= len(files) <= 100:
         raise ValueError("请选择 1–100 个用例文件")
     reference_path = project / "config/corpora/teacher_new_windows_full.json"
-    reference = (
+    bundled_reference = (
         json.loads(reference_path.read_text(encoding="utf-8")) if reference_path.is_file() else {}
+    )
+    decoded, total_bytes = [], 0
+    for uploaded in files:
+        name = Path(str(uploaded["filename"]).replace("\\", "/")).name
+        try:
+            content = base64.b64decode(uploaded["base64"], validate=True)
+        except (ValueError, TypeError) as exc:
+            raise ValueError("文件编码无效") from exc
+        total_bytes += len(content)
+        if total_bytes > 20_000_000:
+            raise ValueError("本次导入总大小不能超过 20 MB")
+        decoded.append(
+            {
+                "name": name,
+                "content": content,
+                "sha256": hashlib.sha256(content).hexdigest(),
+                "suffix": Path(name).suffix.lower(),
+            }
+        )
+
+    mapping_files = []
+    for item in decoded:
+        if item["suffix"] != ".json":
+            continue
+        try:
+            parsed = json.loads(item["content"].decode("utf-8-sig"))
+            mapping = _reference_mapping(parsed)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            mapping = None
+        if mapping is not None:
+            mapping_files.append((item, mapping))
+    if len(mapping_files) > 1:
+        raise ValueError("一次只能选择一个审核映射 JSON")
+
+    uploaded_mapping = mapping_files[0] if mapping_files else None
+    reference = uploaded_mapping[1] if uploaded_mapping else bundled_reference
+    mapping_source = (
+        {"kind": "uploaded", "filename": uploaded_mapping[0]["name"]}
+        if uploaded_mapping
+        else {"kind": "bundled", "filename": reference_path.name}
+        if reference
+        else None
     )
     known_files = {
         value: name
@@ -35,19 +113,16 @@ def preview(files: list, project: Path) -> tuple[dict, dict]:
         for c in reference.get("cases", [])
     }
     cases, problems, sheets, sources = [], [], [], []
-    source_total, total_bytes = 0, 0
-    for uploaded in files:
-        name = Path(str(uploaded["filename"]).replace("\\", "/")).name
-        try:
-            content = base64.b64decode(uploaded["base64"], validate=True)
-        except (ValueError, TypeError) as exc:
-            raise ValueError("文件编码无效") from exc
-        total_bytes += len(content)
-        if total_bytes > 20_000_000:
-            raise ValueError("本次导入总大小不能超过 20 MB")
-        sha = hashlib.sha256(content).hexdigest()
+    source_total = 0
+    has_workbooks = any(item["suffix"] == ".xlsx" for item in decoded)
+    for item in decoded:
+        name, content, sha, suffix = (
+            item["name"],
+            item["content"],
+            item["sha256"],
+            item["suffix"],
+        )
         sources.append({"name": name, "sha256": sha, "bytes": len(content)})
-        suffix = Path(name).suffix.lower()
         if suffix in {".json", ".jsonl"}:
             parsed = (
                 [
@@ -58,6 +133,16 @@ def preview(files: list, project: Path) -> tuple[dict, dict]:
                 if suffix == ".jsonl"
                 else json.loads(content.decode("utf-8-sig"))
             )
+            if uploaded_mapping and item is uploaded_mapping[0] and has_workbooks:
+                sheets.append(
+                    {
+                        "file": name,
+                        "sheet": "审核映射",
+                        "rows": len(reference.get("cases", [])),
+                        "mode": "本机审核映射（仅用于核对 Excel）",
+                    }
+                )
+                continue
             rows = parsed.get("cases") if isinstance(parsed, dict) else parsed
             if not isinstance(rows, list):
                 problems.append(f"{name}：JSON 必须包含 cases 数组")
@@ -166,8 +251,8 @@ def preview(files: list, project: Path) -> tuple[dict, dict]:
                 if teacher and not mapping:
                     problems.append(
                         f"{name}/{sheet.title}：{count} 条原表用例没有匹配的审核映射。"
-                        "新版或修改后的原表需提供 chain_id、user_prompt、tool_response_on "
-                        "等明确字段，不能套用旧映射。"
+                        "请选择与这批 Excel 同时生成的审核映射 JSON；若原表已修改，"
+                        "需重新审核生成映射，不能套用旧版本。"
                     )
         finally:
             workbook.close()
@@ -191,6 +276,7 @@ def preview(files: list, project: Path) -> tuple[dict, dict]:
         "sheets": sheets,
         "problems": problems,
         "can_import": not problems,
+        "mapping": mapping_source,
         "sample": [
             {
                 "case_id": c["case_id"],

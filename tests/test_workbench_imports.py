@@ -1,6 +1,7 @@
 """Workbook importer tests: no source edits and no model execution."""
 
 import base64
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -62,6 +63,49 @@ def test_new_teacher_workbook_requires_reviewed_mapping(tmp_path):
     assert not result["can_import"] and result["source_case_count"] == 1
     assert result["case_count"] == 0
     assert any("审核映射" in p for p in result["problems"])
+
+
+def test_teacher_workbook_accepts_separately_uploaded_audit_mapping(tmp_path):
+    workbook = excel(
+        [["ID", "Atomic Seed Instruction"], ["new-1", "Plain test context."]]
+    )
+    mapping = {
+        "source": {
+            "workbook_sha256": {
+                "teacher.xlsx": hashlib.sha256(workbook).hexdigest(),
+            }
+        },
+        "cases": [
+            {
+                "case_id": "mapped-1",
+                "chain_id": "CHAIN-02",
+                "user_prompt": "Review.",
+                "tool_response_on": "Plain test context.",
+                "metadata": {
+                    "source_workbook": "teacher.xlsx",
+                    "source_sheet": "Sheet",
+                    "source_row": 2,
+                    "attack_category": "Example",
+                },
+            }
+        ],
+    }
+    payload, result = preview(
+        [
+            encode("teacher.xlsx", workbook),
+            encode("teacher-audit-mapping.json", json.dumps(mapping).encode()),
+        ],
+        tmp_path,
+    )
+
+    assert result["can_import"], result["problems"]
+    assert result["case_count"] == result["source_case_count"] == 1
+    assert result["mapping"] == {
+        "kind": "uploaded",
+        "filename": "teacher-audit-mapping.json",
+    }
+    assert payload["cases"][0]["case_id"] == "mapped-1"
+    assert any(sheet["sheet"] == "审核映射" for sheet in result["sheets"])
 
 
 def test_actual_teacher_workbooks_match_all_1080_without_modification():

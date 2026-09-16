@@ -1,4 +1,4 @@
-"""Build reviewable Windows previews, including a sanitized public package."""
+"""Build a Windows release, including a sanitized public package."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def main():
         "workbench_example.json" if options.public else "teacher_new_windows_full.json"
     )
     stage = ROOT / "build" / (
-        "preview-assets-public" if options.public else "preview-assets"
+        "release-assets-public" if options.public else "release-assets"
     )
     stage.mkdir(parents=True, exist_ok=True)
     (stage / "engine-fingerprint.txt").write_text(engine_fingerprint(), encoding="utf-8")
